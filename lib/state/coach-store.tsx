@@ -190,6 +190,22 @@ export function CoachProvider({ children }: CoachProviderProps) {
     void fetchUserProfile().then((profile) => {
       if (cancelled) return
       dispatch({ type: 'setProfile', profile })
+
+      // Update welcome message based on profile status
+      const needsOnboarding = !profile?.onboardingCompleted && (profile?.onboardingStep ?? 0) === 0
+      if (needsOnboarding) {
+        dispatch({
+          type: 'replaceMessages',
+          messages: [
+            {
+              id: 'welcome-onboarding',
+              role: 'coach',
+              content: "Welcome! I'll ask a few quick questions to get to know you and tailor your plan.",
+              createdAt: new Date().toISOString(),
+            },
+          ],
+        })
+      }
     })
 
     return () => {

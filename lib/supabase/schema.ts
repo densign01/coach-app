@@ -29,6 +29,56 @@ export interface Database {
           created_at?: string
         }
       }
+      profiles: {
+        Row: {
+          user_id: string
+          username: string | null
+          first_name: string | null
+          last_name: string | null
+          height_cm: number | null
+          weight_kg: number | null
+          age: number | null
+          gender: string | null
+          goals: string | null
+          onboarding_step: number | null
+          onboarding_data: Json | null
+          onboarding_completed: boolean | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          user_id: string
+          username?: string | null
+          first_name?: string | null
+          last_name?: string | null
+          height_cm?: number | null
+          weight_kg?: number | null
+          age?: number | null
+          gender?: string | null
+          goals?: string | null
+          onboarding_step?: number | null
+          onboarding_data?: Json | null
+          onboarding_completed?: boolean | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          user_id?: string
+          username?: string | null
+          first_name?: string | null
+          last_name?: string | null
+          height_cm?: number | null
+          weight_kg?: number | null
+          age?: number | null
+          gender?: string | null
+          goals?: string | null
+          onboarding_step?: number | null
+          onboarding_data?: Json | null
+          onboarding_completed?: boolean | null
+          created_at?: string
+          updated_at?: string
+        }
+      }
       days: {
         Row: {
           id: string

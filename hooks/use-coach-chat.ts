@@ -53,6 +53,10 @@ export function useCoachChat(): UseCoachChatResult {
           void persistWorkoutOnServer(result.workoutLog)
         }
 
+        if (result.profileUpdate) {
+          dispatch({ type: 'setProfile', profile: result.profileUpdate })
+        }
+
         const coachMessage: CoachMessage = {
           id: crypto.randomUUID(),
           role: 'coach',

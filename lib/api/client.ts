@@ -239,6 +239,9 @@ function normalizeProfile(raw: unknown): UserProfile {
 
   const heightRaw = record.height_cm ?? record.heightCm
   const weightRaw = record.weight_kg ?? record.weightKg
+  const onboardingStepRaw = record.onboarding_step ?? record.onboardingStep
+  const onboardingDataRaw = record.onboarding_data ?? record.onboardingData
+  const onboardingCompletedRaw = record.onboarding_completed ?? record.onboardingCompleted
 
   return {
     userId: String(record.user_id ?? record.userId ?? ''),
@@ -250,6 +253,9 @@ function normalizeProfile(raw: unknown): UserProfile {
     age: record.age !== undefined && record.age !== null ? Number(record.age) : null,
     gender: (record.gender as string) ?? null,
     goals: (record.goals as string) ?? null,
+    onboardingStep: onboardingStepRaw !== undefined && onboardingStepRaw !== null ? Number(onboardingStepRaw) : null,
+    onboardingData: (onboardingDataRaw as Record<string, unknown>) ?? null,
+    onboardingCompleted: onboardingCompletedRaw !== undefined && onboardingCompletedRaw !== null ? Boolean(onboardingCompletedRaw) : null,
     updatedAt: (record.updated_at as string) ?? (record.updatedAt as string) ?? null,
   }
 }

@@ -17,7 +17,7 @@ export function SupabaseProvider({ children, initialSession }: SupabaseProviderP
   const [supabaseClient] = useState(() => getSupabaseBrowserClient())
 
   return (
-    <SessionContextProvider<Database> supabaseClient={supabaseClient} initialSession={initialSession}>
+    <SessionContextProvider supabaseClient={supabaseClient} initialSession={initialSession}>
       {children}
     </SessionContextProvider>
   )

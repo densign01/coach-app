@@ -1,18 +1,36 @@
 import { detectIntent } from '@/lib/ai/intents'
-import { generateCoachResponse, requestMealDraftFromText } from '@/lib/api/client'
+import { generateCoachResponse, requestMealDraftFromText, upsertUserProfile } from '@/lib/api/client'
 import { parseMealFromText } from '@/lib/ai/parsers'
 import { parseWorkoutFromText } from '@/lib/ai/workouts'
+import {
+  getNextOnboardingStep,
+  getOnboardingStep,
+  isOnboardingComplete,
+  parseOnboardingResponse,
+  createOnboardingMessage,
+  parseHeightToCm,
+  parseWeightToKg
+} from '@/lib/ai/onboarding'
 import { calculateDailyTotals, getDaySummary, getUpcomingPlan, getWeeklyWorkoutStats } from '@/lib/data/queries'
-import type { CoachState, MealDraft, MacroBreakdown, MealType, WorkoutLog } from '@/lib/types'
+import type { CoachState, MealDraft, MacroBreakdown, MealType, WorkoutLog, UserProfile } from '@/lib/types'
 import { buildDayId } from '@/lib/utils'
 
 interface CoachReply {
   coachMessage: string
   mealDraft?: MealDraft
   workoutLog?: WorkoutLog
+  profileUpdate?: UserProfile
 }
 
 export async function orchestrateCoachReply(message: string, state: CoachState): Promise<CoachReply> {
+  // Check if user is in onboarding flow
+  const profile = state.profile
+  const isInOnboarding = !profile?.onboardingCompleted && (profile?.onboardingStep ?? 0) >= 0
+
+  if (isInOnboarding) {
+    return await handleOnboardingFlow(message, state)
+  }
+
   const intent = detectIntent(message)
 
   switch (intent.type) {
@@ -235,5 +253,99 @@ function describeMood(mood: 'tired' | 'sore' | 'energized' | 'neutral', message:
       return `User feels energized and ready for more: "${message}"`
     default:
       return undefined
+  }
+}
+
+async function handleOnboardingFlow(message: string, state: CoachState): Promise<CoachReply> {
+  const profile = state.profile
+  const currentStep = profile?.onboardingStep ?? 0
+  const onboardingData = profile?.onboardingData ?? {}
+
+  // If this is the first message, start onboarding
+  if (currentStep === 0) {
+    const firstStep = getOnboardingStep(1)
+    if (!firstStep) {
+      return { coachMessage: "Sorry, there was an issue with the onboarding flow." }
+    }
+
+    const updatedProfile: UserProfile = {
+      userId: state.userId!,
+      ...profile,
+      onboardingStep: 1,
+      onboardingData,
+      onboardingCompleted: false,
+    }
+
+    // Save the updated profile
+    await upsertUserProfile(updatedProfile)
+
+    return {
+      coachMessage: firstStep.question,
+      profileUpdate: updatedProfile,
+    }
+  }
+
+  // Process the user's response to the current step
+  const currentStepData = getOnboardingStep(currentStep)
+  if (!currentStepData) {
+    return { coachMessage: "Let me start over with a fresh approach to getting to know you." }
+  }
+
+  let updatedData = { ...onboardingData }
+  let updatedProfile: UserProfile = { ...profile, userId: state.userId! }
+
+  // Parse the response based on the current step
+  if (currentStep > 1) { // Skip parsing for the welcome message
+    const parsedData = parseOnboardingResponse(currentStepData, message, onboardingData)
+    updatedData = { ...updatedData, ...parsedData }
+
+    // Handle special parsing for height and weight
+    if (currentStepData.field === 'heightCm') {
+      const heightCm = parseHeightToCm(message)
+      if (heightCm) {
+        updatedProfile.heightCm = heightCm
+      }
+    } else if (currentStepData.field === 'weightKg') {
+      const weightKg = parseWeightToKg(message)
+      if (weightKg) {
+        updatedProfile.weightKg = weightKg
+      }
+    }
+
+    // Update profile fields directly
+    if (currentStepData.field && currentStepData.field !== 'custom') {
+      const fieldValue = parsedData[currentStepData.field as string]
+      if (fieldValue !== undefined) {
+        (updatedProfile as any)[currentStepData.field] = fieldValue
+      }
+    }
+  }
+
+  // Move to next step
+  const nextStep = getNextOnboardingStep(currentStep, updatedData)
+
+  if (!nextStep) {
+    // Onboarding complete
+    updatedProfile.onboardingCompleted = true
+    updatedProfile.onboardingStep = currentStep + 1
+    updatedProfile.onboardingData = updatedData
+
+    await upsertUserProfile(updatedProfile)
+
+    return {
+      coachMessage: "Thanks! I'll use this info to set your initial nutrition targets and workout plan. You can always update me if things change.\n\nNow, tell me about your energy, meals, or movement today and I'll help you chart the next step.",
+      profileUpdate: updatedProfile,
+    }
+  }
+
+  // Continue to next step
+  updatedProfile.onboardingStep = nextStep.id
+  updatedProfile.onboardingData = updatedData
+
+  await upsertUserProfile(updatedProfile)
+
+  return {
+    coachMessage: nextStep.question,
+    profileUpdate: updatedProfile,
   }
 }

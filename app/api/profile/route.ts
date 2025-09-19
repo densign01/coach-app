@@ -11,6 +11,9 @@ type ProfilePayload = Partial<{
   age: number | string | null
   gender: string | null
   goals: string | null
+  onboardingStep: number | null
+  onboardingData: Record<string, unknown> | null
+  onboardingCompleted: boolean | null
 }>
 
 export async function GET() {
@@ -75,7 +78,7 @@ export async function PUT(request: Request) {
 }
 
 function normalizeProfilePayload(payload: ProfilePayload) {
-  const result: Record<string, string | number | null | undefined> = {}
+  const result: Record<string, string | number | boolean | object | null | undefined> = {}
 
   if ('username' in payload) result.username = coerceString(payload.username)
   if ('firstName' in payload) result.first_name = coerceString(payload.firstName)
@@ -86,6 +89,10 @@ function normalizeProfilePayload(payload: ProfilePayload) {
   if ('heightCm' in payload) result.height_cm = coerceNumber(payload.heightCm)
   if ('weightKg' in payload) result.weight_kg = coerceNumber(payload.weightKg)
   if ('age' in payload) result.age = payload.age === null ? null : coerceNumber(payload.age)
+
+  if ('onboardingStep' in payload) result.onboarding_step = coerceNumber(payload.onboardingStep)
+  if ('onboardingData' in payload) result.onboarding_data = payload.onboardingData
+  if ('onboardingCompleted' in payload) result.onboarding_completed = Boolean(payload.onboardingCompleted)
 
   return result
 }

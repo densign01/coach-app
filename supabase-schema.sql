@@ -20,6 +20,9 @@ CREATE TABLE profiles (
   age INTEGER,
   gender TEXT,
   goals TEXT,
+  onboarding_step INTEGER DEFAULT 0,
+  onboarding_data JSONB,
+  onboarding_completed BOOLEAN DEFAULT FALSE,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );

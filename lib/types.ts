@@ -30,6 +30,7 @@ export interface WorkoutLog {
   date: string
   type: string
   minutes: number
+  distance?: number
   intensity?: 'easy' | 'moderate' | 'hard'
   description?: string
   status: WorkoutStatus
@@ -55,6 +56,9 @@ export interface UserProfile {
   age?: number | null
   gender?: string | null
   goals?: string | null
+  onboardingStep?: number | null
+  onboardingData?: Record<string, unknown> | null
+  onboardingCompleted?: boolean | null
   updatedAt?: string | null
 }
 

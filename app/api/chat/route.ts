@@ -132,7 +132,7 @@ function extractMessage(data: unknown): string | null {
       }
 
       if (chunk && typeof chunk === 'object') {
-        const text = typeof (chunk as ResponseContentBlock).text === 'string' ? (chunk as ResponseContentBlock).text.trim() : ''
+        const text = typeof (chunk as ResponseContentBlock).text === 'string' ? (chunk as ResponseContentBlock).text?.trim() : ''
         const type = (chunk as ResponseContentBlock).type
         if (text) {
           return text
