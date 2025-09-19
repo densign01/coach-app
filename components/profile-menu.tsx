@@ -3,16 +3,8 @@
 import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useSessionContext } from '@supabase/auth-helpers-react'
-import { Menu, User, LogOut } from 'lucide-react'
+import { User, LogOut } from 'lucide-react'
 
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
 import { Button } from '@/components/ui/button'
 
 interface ProfileMenuProps {
@@ -51,50 +43,32 @@ export function ProfileMenu({ username }: ProfileMenuProps) {
     }
   }
 
-  const handleTriggerClick = () => {
-    console.log('Hamburger menu clicked!')
-  }
-
   return (
-    <DropdownMenu modal={false}>
-      <DropdownMenuTrigger asChild>
-        <Button
-          variant="outline"
-          size="icon"
-          className="rounded-full focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-          onClick={handleTriggerClick}
-        >
-          <Menu className="h-4 w-4" />
-          <span className="sr-only">Open profile menu</span>
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-48 z-[100]" sideOffset={8}>
-        <DropdownMenuLabel className="text-xs text-muted-foreground">Signed in as</DropdownMenuLabel>
-        <div className="px-2 pb-2 text-sm font-medium text-foreground truncate">{displayName}</div>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem
-          onSelect={(e) => {
-            e.preventDefault()
-            handleProfileClick()
-          }}
-          className="cursor-pointer"
-        >
-          <User className="mr-2 h-4 w-4" />
-          Profile
-        </DropdownMenuItem>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem
-          onSelect={(e) => {
-            e.preventDefault()
-            handleSignOut()
-          }}
-          className="cursor-pointer text-destructive focus:text-destructive"
-          disabled={isSigningOut}
-        >
-          <LogOut className="mr-2 h-4 w-4" />
+    <div className="flex items-center gap-2">
+      <span className="text-sm text-muted-foreground hidden sm:inline">
+        {displayName}
+      </span>
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={handleProfileClick}
+        className="flex items-center gap-2"
+      >
+        <User className="h-4 w-4" />
+        Profile
+      </Button>
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={handleSignOut}
+        disabled={isSigningOut}
+        className="text-destructive hover:text-destructive hover:bg-destructive/10"
+      >
+        <LogOut className="h-4 w-4" />
+        <span className="hidden sm:inline ml-1">
           {isSigningOut ? 'Signing out...' : 'Sign out'}
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+        </span>
+      </Button>
+    </div>
   )
 }
