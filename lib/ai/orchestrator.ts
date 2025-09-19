@@ -9,7 +9,8 @@ import {
   parseOnboardingResponse,
   createOnboardingMessage,
   parseHeightToCm,
-  parseWeightToKg
+  parseWeightToKg,
+  generateOnboardingResponse
 } from '@/lib/ai/onboarding'
 import { calculateDailyTotals, getDaySummary, getUpcomingPlan, getWeeklyWorkoutStats } from '@/lib/data/queries'
 import type { CoachState, MealDraft, MacroBreakdown, MealType, WorkoutLog, UserProfile } from '@/lib/types'
@@ -332,20 +333,26 @@ async function handleOnboardingFlow(message: string, state: CoachState): Promise
 
     await upsertUserProfile(updatedProfile)
 
+    // Generate conversational completion message
+    const completionMessage = await generateOnboardingResponse(message, currentStepData, null)
+
     return {
-      coachMessage: "Thanks! I'll use this info to set your initial nutrition targets and workout plan. You can always update me if things change.\n\nNow, tell me about your energy, meals, or movement today and I'll help you chart the next step.",
+      coachMessage: `${completionMessage}\n\nNow, tell me about your energy, meals, or movement today and I'll help you chart the next step.`,
       profileUpdate: updatedProfile,
     }
   }
 
-  // Continue to next step
+  // Continue to next step with conversational response
   updatedProfile.onboardingStep = nextStep.id
   updatedProfile.onboardingData = updatedData
 
   await upsertUserProfile(updatedProfile)
 
+  // Generate conversational response that acknowledges current answer and asks next question
+  const conversationalMessage = await generateOnboardingResponse(message, currentStepData, nextStep)
+
   return {
-    coachMessage: nextStep.question,
+    coachMessage: conversationalMessage,
     profileUpdate: updatedProfile,
   }
 }

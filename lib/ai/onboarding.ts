@@ -1,5 +1,77 @@
 import type { CoachMessage, UserProfile } from '@/lib/types'
 
+export async function generateOnboardingResponse(
+  userResponse: string,
+  currentStep: OnboardingStep,
+  nextStep: OnboardingStep | null
+): Promise<string> {
+  const apiKey = process.env.OPENAI_API_KEY
+
+  if (!apiKey) {
+    // Fallback to simple acknowledgment if no API key
+    return `Got it! ${nextStep ? nextStep.question : "Thanks for that information."}`
+  }
+
+  try {
+    const systemPrompt = `You are a friendly, encouraging fitness coach conducting onboarding.
+Your job is to acknowledge what the user just shared and then ask the next question.
+
+Current context:
+- Just asked: "${currentStep.question}"
+- User responded: "${userResponse}"
+- Next question: ${nextStep ? `"${nextStep.question}"` : "This completes onboarding"}
+
+Instructions:
+1. Briefly acknowledge their response (1-2 sentences max)
+2. ${nextStep ? 'Then ask the next question naturally' : 'Wrap up warmly'}
+3. Be conversational, encouraging, and personal
+4. Don't repeat their exact words back
+5. Keep it concise but warm
+
+Examples:
+- "Great! That helps me understand your routine. Now, how tall are you?"
+- "Perfect - I'll keep that in mind. What's your current weight?"
+- "Thanks for sharing that. How many hours of sleep do you typically get?"`
+
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userResponse }
+        ],
+        max_tokens: 150,
+        temperature: 0.7,
+      }),
+    })
+
+    if (!response.ok) {
+      throw new Error('OpenAI API request failed')
+    }
+
+    const data = await response.json()
+    const message = data.choices?.[0]?.message?.content?.trim()
+
+    if (message) {
+      return message
+    }
+  } catch (error) {
+    console.error('Error generating onboarding response:', error)
+  }
+
+  // Fallback response
+  if (nextStep) {
+    return `Thanks for that! ${nextStep.question}`
+  } else {
+    return "Perfect! That gives me everything I need to get started."
+  }
+}
+
 export interface OnboardingStep {
   id: number
   section: string
