@@ -10,7 +10,8 @@ import {
   createOnboardingMessage,
   parseHeightToCm,
   parseWeightToKg,
-  generateOnboardingResponse
+  generateOnboardingResponse,
+  generateProfileSummary
 } from '@/lib/ai/onboarding'
 import { calculateDailyTotals, getDaySummary, getUpcomingPlan, getWeeklyWorkoutStats } from '@/lib/data/queries'
 import type { CoachState, MealDraft, MacroBreakdown, MealType, WorkoutLog, UserProfile } from '@/lib/types'
@@ -333,11 +334,11 @@ async function handleOnboardingFlow(message: string, state: CoachState): Promise
 
     await upsertUserProfile(updatedProfile)
 
-    // Generate conversational completion message
-    const completionMessage = await generateOnboardingResponse(message, currentStepData, null)
+    // Generate AI profile summary
+    const profileSummary = await generateProfileSummary(updatedProfile, updatedData)
 
     return {
-      coachMessage: `${completionMessage}\n\nNow, tell me about your energy, meals, or movement today and I'll help you chart the next step.`,
+      coachMessage: `${profileSummary}\n\nNow, tell me about your energy, meals, or movement today and I'll help you chart the next step.`,
       profileUpdate: updatedProfile,
     }
   }

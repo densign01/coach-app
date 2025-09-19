@@ -51,25 +51,43 @@ export function ProfileMenu({ username }: ProfileMenuProps) {
     }
   }
 
+  const handleTriggerClick = () => {
+    console.log('Hamburger menu clicked!')
+  }
+
   return (
-    <DropdownMenu>
+    <DropdownMenu modal={false}>
       <DropdownMenuTrigger asChild>
-        <Button variant="outline" size="icon" className="rounded-full focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2">
+        <Button
+          variant="outline"
+          size="icon"
+          className="rounded-full focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+          onClick={handleTriggerClick}
+        >
           <Menu className="h-4 w-4" />
           <span className="sr-only">Open profile menu</span>
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-48" sideOffset={8}>
+      <DropdownMenuContent align="end" className="w-48 z-[100]" sideOffset={8}>
         <DropdownMenuLabel className="text-xs text-muted-foreground">Signed in as</DropdownMenuLabel>
         <div className="px-2 pb-2 text-sm font-medium text-foreground truncate">{displayName}</div>
         <DropdownMenuSeparator />
-        <DropdownMenuItem onSelect={handleProfileClick} className="cursor-pointer">
+        <DropdownMenuItem
+          onSelect={(e) => {
+            e.preventDefault()
+            handleProfileClick()
+          }}
+          className="cursor-pointer"
+        >
           <User className="mr-2 h-4 w-4" />
           Profile
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem
-          onSelect={handleSignOut}
+          onSelect={(e) => {
+            e.preventDefault()
+            handleSignOut()
+          }}
           className="cursor-pointer text-destructive focus:text-destructive"
           disabled={isSigningOut}
         >

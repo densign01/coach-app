@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useState, useRef } from "react"
 import type { ComponentType } from "react"
 import { useRouter } from "next/navigation"
 import { useSessionContext } from "@supabase/auth-helpers-react"
@@ -24,6 +24,8 @@ export default function CoachApp() {
   const { session, isLoading: isSessionLoading } = useSessionContext()
   const [activeTab, setActiveTab] = useState<Tab>("home")
   const [inputValue, setInputValue] = useState("")
+  const scrollAreaRef = useRef<HTMLDivElement>(null)
+  const messagesEndRef = useRef<HTMLDivElement>(null)
 
   const { messages, sendMessage, isProcessing, error } = useCoachChat()
   const { state } = useCoachStore()
@@ -34,6 +36,13 @@ export default function CoachApp() {
       router.replace("/login")
     }
   }, [isSessionLoading, session, router])
+
+  // Auto-scroll to bottom when messages change
+  useEffect(() => {
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' })
+    }
+  }, [messages, drafts])
 
   const todaysMeals = useMemo(
     () => getMealsForDate(state.meals, state.activeDate),
@@ -86,39 +95,44 @@ export default function CoachApp() {
         </div>
       </div>
 
-      <ScrollArea className="flex-1 p-6">
-        <div className="space-y-4 pb-28">
-          {messages.map((message) => (
-            <div key={message.id} className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}>
-              <div
-                className={`max-w-[80%] p-4 rounded-lg ${
-                  message.role === "user" ? "bg-primary text-primary-foreground" : "bg-card text-card-foreground"
-                }`}
-              >
-                <p className="text-sm leading-relaxed whitespace-pre-line">{message.content}</p>
-                <p className="text-xs opacity-70 mt-2">
-                  {new Date(message.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                </p>
+      <div className="flex-1 overflow-hidden">
+        <div className="h-full overflow-y-auto p-6" ref={scrollAreaRef}>
+          <div className="space-y-4 pb-28">
+            {messages.map((message) => (
+              <div key={message.id} className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}>
+                <div
+                  className={`max-w-[80%] p-4 rounded-lg ${
+                    message.role === "user" ? "bg-primary text-primary-foreground" : "bg-card text-card-foreground"
+                  }`}
+                >
+                  <p className="text-sm leading-relaxed whitespace-pre-line">{message.content}</p>
+                  <p className="text-xs opacity-70 mt-2">
+                    {new Date(message.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                  </p>
+                </div>
               </div>
-            </div>
-          ))}
+            ))}
 
-          {error ? <p className="text-sm text-destructive">{error}</p> : null}
+            {error ? <p className="text-sm text-destructive">{error}</p> : null}
 
-          {drafts.length > 0 ? (
-            <div className="space-y-2">
-              {drafts.map((draft) => (
-                <MealDraftCard
-                  key={draft.id}
-                  draft={draft}
-                  onConfirm={() => void confirmDraft(draft)}
-                  onDismiss={() => dismissDraft(draft.id)}
-                />
-              ))}
-            </div>
-          ) : null}
+            {drafts.length > 0 ? (
+              <div className="space-y-2">
+                {drafts.map((draft) => (
+                  <MealDraftCard
+                    key={draft.id}
+                    draft={draft}
+                    onConfirm={() => void confirmDraft(draft)}
+                    onDismiss={() => dismissDraft(draft.id)}
+                  />
+                ))}
+              </div>
+            ) : null}
+
+            {/* Invisible element to scroll to */}
+            <div ref={messagesEndRef} />
+          </div>
         </div>
-      </ScrollArea>
+      </div>
 
       <div className="p-6 border-t border-border">
         <div className="flex gap-2 items-center">

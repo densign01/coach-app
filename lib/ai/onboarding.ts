@@ -72,6 +72,86 @@ Examples:
   }
 }
 
+export async function generateProfileSummary(
+  profile: UserProfile,
+  onboardingData: Record<string, unknown>
+): Promise<string> {
+  const apiKey = process.env.OPENAI_API_KEY
+
+  if (!apiKey) {
+    return generateFallbackSummary(profile, onboardingData)
+  }
+
+  try {
+    const profileInfo = `
+Age: ${profile.age || 'Not specified'}
+Gender: ${profile.gender || 'Not specified'}
+Height: ${profile.heightCm ? `${profile.heightCm}cm` : 'Not specified'}
+Weight: ${profile.weightKg ? `${profile.weightKg}kg` : 'Not specified'}
+Goals: ${profile.goals || 'Not specified'}
+
+Additional Information:
+${Object.entries(onboardingData)
+  .filter(([key, value]) => value && typeof value === 'string' && value.trim())
+  .map(([key, value]) => `${key}: ${value}`)
+  .join('\n')}
+`
+
+    const systemPrompt = `You are a fitness coach creating a personalized summary after onboarding.
+
+Create a warm, encouraging 2-3 paragraph summary that:
+1. Acknowledges their goals and current situation
+2. Highlights key insights from their responses
+3. Sets expectations for their journey ahead
+4. Sounds personal and motivating
+
+Keep it conversational, specific to their details, and under 200 words.`
+
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'gpt-5-mini',
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: `Please create a profile summary for this user:\n\n${profileInfo}` }
+        ],
+        max_tokens: 250,
+        temperature: 0.7,
+      }),
+    })
+
+    if (!response.ok) {
+      throw new Error('OpenAI API request failed')
+    }
+
+    const data = await response.json()
+    const summary = data.choices?.[0]?.message?.content?.trim()
+
+    if (summary) {
+      return summary
+    }
+  } catch (error) {
+    console.error('Error generating profile summary:', error)
+  }
+
+  return generateFallbackSummary(profile, onboardingData)
+}
+
+function generateFallbackSummary(profile: UserProfile, onboardingData: Record<string, unknown>): string {
+  const age = profile.age ? `${profile.age}-year-old` : ''
+  const goals = profile.goals || 'health and fitness goals'
+
+  return `Welcome to your personalized coaching journey! Based on what you've shared, I understand you're focused on ${goals}.
+
+I'll be here to support you with tailored nutrition guidance and workout recommendations that fit your lifestyle. We'll take things step by step, building sustainable habits that work for you.
+
+Ready to get started? Tell me about your day - whether it's a meal, workout, or how you're feeling - and I'll help guide you toward your goals!`
+}
+
 export interface OnboardingStep {
   id: number
   section: string
