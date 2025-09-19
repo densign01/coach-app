@@ -18,7 +18,7 @@ export interface MealLog {
   type: MealType
   items: string[]
   macros: MacroBreakdown
-  source: 'text' | 'vision' | 'manual'
+  source: 'text' | 'vision' | 'manual' | 'est'
   createdAt: string
 }
 
@@ -43,6 +43,19 @@ export interface CoachMessage {
   content: string
   createdAt: string
   metadata?: Record<string, unknown>
+}
+
+export interface UserProfile {
+  userId: string
+  username?: string | null
+  firstName?: string | null
+  lastName?: string | null
+  heightCm?: number | null
+  weightKg?: number | null
+  age?: number | null
+  gender?: string | null
+  goals?: string | null
+  updatedAt?: string | null
 }
 
 export interface MealDraft {
@@ -87,8 +100,18 @@ export interface WeeklyPlanEntry {
   suggestedIntensity: 'easy' | 'moderate' | 'hard'
 }
 
+export interface DaySnapshot {
+  dayId: string
+  date: string
+  meals: MealLog[]
+  workouts: WorkoutLog[]
+  targets?: MacroBreakdown
+}
+
 export interface CoachState {
   activeDate: string
+  userId: string | null
+  profile: UserProfile | null
   messages: CoachMessage[]
   mealDrafts: MealDraft[]
   meals: MealLog[]
@@ -109,6 +132,9 @@ export type CoachAction =
   | { type: 'removeWorkout'; workoutId: string }
   | { type: 'setWeeklyPlan'; plan: WeeklyPlanEntry[] }
   | { type: 'setTargets'; targets: MacroBreakdown }
+  | { type: 'syncDay'; payload: DaySnapshot }
+  | { type: 'setUser'; userId: string | null }
+  | { type: 'setProfile'; profile: UserProfile | null }
 
 export interface CoachContextValue {
   state: CoachState

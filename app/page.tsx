@@ -1,7 +1,9 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import type { ComponentType } from "react"
+import { useRouter } from "next/navigation"
+import { useSessionContext } from "@supabase/auth-helpers-react"
 import { Apple, Dumbbell, Loader2, MessageCircle } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -9,6 +11,7 @@ import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
+import { ProfileMenu } from "@/components/profile-menu"
 
 import { useCoachChat } from "@/hooks/use-coach-chat"
 import { useMealDrafts } from "@/hooks/use-meal-drafts"
@@ -17,12 +20,20 @@ import { calculateDailyTotals, getMealsByType, getMealsForDate, getWorkoutsForDa
 import type { MealDraft, Tab } from "@/lib/types"
 
 export default function CoachApp() {
+  const router = useRouter()
+  const { session, isLoading: isSessionLoading } = useSessionContext()
   const [activeTab, setActiveTab] = useState<Tab>("home")
   const [inputValue, setInputValue] = useState("")
 
   const { messages, sendMessage, isProcessing, error } = useCoachChat()
   const { state } = useCoachStore()
   const { drafts, confirmDraft, dismissDraft } = useMealDrafts()
+
+  useEffect(() => {
+    if (!isSessionLoading && !session) {
+      router.replace("/login")
+    }
+  }, [isSessionLoading, session, router])
 
   const todaysMeals = useMemo(
     () => getMealsForDate(state.meals, state.activeDate),
@@ -59,15 +70,24 @@ export default function CoachApp() {
     setInputValue("")
   }
 
+  if (isSessionLoading || !session) {
+    return <div className="flex h-screen items-center justify-center text-sm text-muted-foreground">Loading your coach...</div>
+  }
+
   const renderHomeTab = () => (
     <div className="flex flex-col h-full">
       <div className="p-6 border-b border-border">
-        <h1 className="text-2xl font-semibold text-balance">Your Coach</h1>
-        <p className="text-muted-foreground mt-1">Share how you are feeling, eating, or moving.</p>
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-semibold text-balance">Your Coach</h1>
+            <p className="text-muted-foreground mt-1">Share how you are feeling, eating, or moving.</p>
+          </div>
+          <ProfileMenu username={state.profile?.username ?? state.profile?.firstName} />
+        </div>
       </div>
 
       <ScrollArea className="flex-1 p-6">
-        <div className="space-y-4">
+        <div className="space-y-4 pb-28">
           {messages.map((message) => (
             <div key={message.id} className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}>
               <div

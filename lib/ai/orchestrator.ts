@@ -1,9 +1,10 @@
 import { detectIntent } from '@/lib/ai/intents'
-import { requestMealDraftFromText } from '@/lib/api/client'
+import { generateCoachResponse, requestMealDraftFromText } from '@/lib/api/client'
 import { parseMealFromText } from '@/lib/ai/parsers'
 import { parseWorkoutFromText } from '@/lib/ai/workouts'
 import { calculateDailyTotals, getDaySummary, getUpcomingPlan, getWeeklyWorkoutStats } from '@/lib/data/queries'
 import type { CoachState, MealDraft, MacroBreakdown, MealType, WorkoutLog } from '@/lib/types'
+import { buildDayId } from '@/lib/utils'
 
 interface CoachReply {
   coachMessage: string
@@ -16,9 +17,9 @@ export async function orchestrateCoachReply(message: string, state: CoachState):
 
   switch (intent.type) {
     case 'logMeal':
-      return handleMealLogging(intent.payload.text, state)
+      return await handleMealLogging(intent.payload.text, state)
     case 'logWorkout':
-      return handleWorkoutLogging(intent.payload.text, state)
+      return await handleWorkoutLogging(intent.payload.text, state)
     case 'askPlan':
       return {
         coachMessage: describeUpcomingPlan(state),
@@ -32,17 +33,11 @@ export async function orchestrateCoachReply(message: string, state: CoachState):
         coachMessage: summarizeProgress(state),
       }
     case 'statusUpdate':
-      return {
-        coachMessage: respondToStatus(intent.payload.mood, state),
-      }
+      return await buildGenerativeReply(state, message, { energyNote: describeMood(intent.payload.mood, message) })
     case 'smallTalk':
-      return {
-        coachMessage: 'Happy you checked in. Anything you want to focus on today?',
-      }
+    case 'unknown':
     default:
-      return {
-        coachMessage: generalNudge(state),
-      }
+      return await buildGenerativeReply(state, message, {})
   }
 }
 
@@ -52,10 +47,11 @@ async function handleMealLogging(text: string, state: CoachState): Promise<Coach
     ? {
         mealType: (draftFromApi.mealType ?? 'snack') as MealType,
         items: draftFromApi.items,
-        macros: draftFromApi.macros,
+        macros: parsedMacros(draftFromApi.macros),
         confidence: draftFromApi.confidence,
       }
     : await parseMealFromText(text)
+
   const draft: MealDraft = {
     id: crypto.randomUUID(),
     createdAt: new Date().toISOString(),
@@ -70,17 +66,20 @@ async function handleMealLogging(text: string, state: CoachState): Promise<Coach
   }
 
   const todaysTotals = calculateDailyTotals(state.meals.filter((meal) => meal.date === state.activeDate))
-
   const projectedTotals = addMacros(todaysTotals, parsed.macros)
 
-  const comparison =
-    `That adds about ${parsed.macros.protein.toFixed(0)}g protein and ${parsed.macros.calories.toFixed(0)} calories. ` +
-    `Projected today → ${projectedTotals.protein.toFixed(0)}g protein / ${projectedTotals.calories.toFixed(0)} cal.`
+  const mealSummary = `${parsed.items.join(', ')} (~${Math.round(parsed.macros.protein)}g protein / ${Math.round(parsed.macros.calories)} cal)`
 
   const coachMessage =
-    parsed.confidence === 'low'
+    (await generateCoachResponse({
+      userMessage: text,
+      state,
+      mealDraftSummary: mealSummary,
+      intent: 'meal_log',
+    })) ??
+    (parsed.confidence === 'low'
       ? "I can take a guess at that meal, but double-check the details before we log it."
-      : `Nice. ${comparison} Does that look right?`
+      : `Nice. That adds about ${parsed.macros.protein.toFixed(0)}g protein and ${parsed.macros.calories.toFixed(0)} calories. Projected today → ${projectedTotals.protein.toFixed(0)}g protein / ${projectedTotals.calories.toFixed(0)} cal. Does that look right?`)
 
   return {
     coachMessage,
@@ -88,11 +87,18 @@ async function handleMealLogging(text: string, state: CoachState): Promise<Coach
   }
 }
 
-function handleWorkoutLogging(text: string, state: CoachState): CoachReply {
+async function handleWorkoutLogging(text: string, state: CoachState): Promise<CoachReply> {
+  if (!state.userId) {
+    return {
+      coachMessage: 'Please sign in so I can log your activity.',
+    }
+  }
+
   const parsed = parseWorkoutFromText(text)
+  const dayId = buildDayId(state.userId, state.activeDate)
   const workout: WorkoutLog = {
     id: crypto.randomUUID(),
-    dayId: state.activeDate,
+    dayId,
     date: state.activeDate,
     type: parsed.type,
     minutes: parsed.minutes,
@@ -104,28 +110,36 @@ function handleWorkoutLogging(text: string, state: CoachState): CoachReply {
     distance: parsed.distance,
   }
 
-  const updatedStats = getWeeklyWorkoutStats({ ...state, workouts: [...state.workouts, workout] })
-  const todayWeekday = new Date(state.activeDate).getDay()
-  const todaysPlan = state.weeklyPlan.find((entry) => entry.weekday === todayWeekday)
-
-  const planDelta = todaysPlan ? todaysPlan.minutesTarget - workout.minutes : null
-
-  const comparison = todaysPlan
-    ? planDelta && planDelta > 5
-      ? `That keeps you within ${Math.abs(planDelta)} minutes of today's ${todaysPlan.focus} target.`
-      : `You just knocked out the ${todaysPlan.focus} focus. Nice work.`
-    : 'Logged and counted. Every bit of movement adds up.'
-
-  const distanceSnippet = parsed.distance ? ` ~${parsed.distance} distance logged.` : ''
+  const workoutSummary = `${workout.type} for ${workout.minutes} minutes${parsed.distance ? ` (~${parsed.distance} distance)` : ''}`
 
   const coachMessage =
-    `Logged ${workout.type.toLowerCase()} for ${workout.minutes} minutes${distanceSnippet}. ${comparison} ` +
-    `Week total → ${updatedStats.workoutsCompleted} sessions / ${updatedStats.totalMinutes} minutes (${updatedStats.adherence}% of plan).`
+    (await generateCoachResponse({
+      userMessage: text,
+      state,
+      workoutSummary,
+      intent: 'workout_log',
+    })) ??
+    defaultWorkoutMessage(workout, state)
 
   return {
     coachMessage,
     workoutLog: workout,
   }
+}
+
+function defaultWorkoutMessage(workout: WorkoutLog, state: CoachState) {
+  const updatedStats = getWeeklyWorkoutStats({ ...state, workouts: [...state.workouts, workout] })
+  const todayWeekday = new Date(state.activeDate).getDay()
+  const todaysPlan = state.weeklyPlan.find((entry) => entry.weekday === todayWeekday)
+  const planDelta = todaysPlan ? todaysPlan.minutesTarget - workout.minutes : null
+  const comparison = todaysPlan
+    ? planDelta && planDelta > 5
+      ? `That keeps you within ${Math.abs(planDelta)} minutes of today's ${todaysPlan.focus} target.`
+      : `You just knocked out the ${todaysPlan.focus} focus. Nice work.`
+    : 'Logged and counted. Every bit of movement adds up.'
+  const distanceSnippet = workout.distance ? ` ~${workout.distance} distance logged.` : ''
+
+  return `Logged ${workout.type.toLowerCase()} for ${workout.minutes} minutes${distanceSnippet}. ${comparison} Week total → ${updatedStats.workoutsCompleted} sessions / ${updatedStats.totalMinutes} minutes (${updatedStats.adherence}% of plan).`
 }
 
 function describeUpcomingPlan(state: CoachState) {
@@ -153,24 +167,6 @@ function summarizeProgress(state: CoachState) {
   return `You've finished ${stats.workoutsCompleted} sessions for ${stats.totalMinutes} minutes. That's about ${stats.adherence}% of the plan so far. Nice consistency.`
 }
 
-function respondToStatus(mood: 'tired' | 'sore' | 'energized' | 'neutral', state: CoachState) {
-  const todayPlan = getUpcomingPlan(state)
-  switch (mood) {
-    case 'tired':
-      return todayPlan
-        ? `Thanks for telling me. Let's swap today's ${todayPlan.focus.toLowerCase()} for 15 minutes of easy mobility instead. Sound good?`
-        : "Thanks for telling me. Let's dial things back—consider a light walk or mobility and call it good."
-    case 'sore':
-      return "Recovery matters. Focus on easy movement and hydration today; we can push again once you're fresher."
-    case 'energized':
-      return todayPlan
-        ? `Love that energy. Want to extend today's ${todayPlan.focus.toLowerCase()} by 5-10 minutes or add a finisher?`
-        : "Love that energy. Want to extend today's session a bit or add a finisher?"
-    default:
-      return "Noted. Anything you'd like to adjust in your plan or meals?"
-  }
-}
-
 function addMacros(base: MacroBreakdown, delta: MacroBreakdown): MacroBreakdown {
   return {
     calories: base.calories + delta.calories,
@@ -180,11 +176,36 @@ function addMacros(base: MacroBreakdown, delta: MacroBreakdown): MacroBreakdown 
   }
 }
 
-function generalNudge(state: CoachState) {
+async function buildGenerativeReply(
+  state: CoachState,
+  userMessage: string,
+  { energyNote }: { energyNote?: string },
+): Promise<CoachReply> {
+  const generated = await generateCoachResponse({
+    userMessage,
+    state,
+    energyNote,
+    intent: 'status_update',
+  })
+
+  if (generated) {
+    return { coachMessage: generated }
+  }
+
+  if (energyNote && energyNote.toLowerCase().includes('unwell')) {
+    return {
+      coachMessage: "Thanks for telling me. Let's listen to your body—take the day to recover with light movement or extra rest, and we'll reassess tomorrow."
+    }
+  }
+
+  return { coachMessage: fallbackGeneral(state) }
+}
+
+function fallbackGeneral(state: CoachState) {
   const stats = getWeeklyWorkoutStats(state)
 
   if (stats.workoutsCompleted === 0) {
-    return "Thanks for the update. Want to log a short walk or stretch session? Even 10 minutes counts toward the plan."
+    return 'Thanks for the update. Want to log a short walk or stretch session? Even 10 minutes counts toward the plan.'
   }
 
   const todayMeals = state.meals.filter((meal) => meal.date === state.activeDate)
@@ -193,4 +214,26 @@ function generalNudge(state: CoachState) {
   }
 
   return "Thanks for sharing. Want me to log anything else or adjust today's plan?"
+}
+
+function parsedMacros(macros: MacroBreakdown) {
+  return {
+    calories: Number(macros.calories ?? 0),
+    protein: Number(macros.protein ?? 0),
+    fat: Number(macros.fat ?? 0),
+    carbs: Number(macros.carbs ?? 0),
+  }
+}
+
+function describeMood(mood: 'tired' | 'sore' | 'energized' | 'neutral', message: string) {
+  switch (mood) {
+    case 'tired':
+      return `User reports low energy / feeling unwell: "${message}"`
+    case 'sore':
+      return `User reports soreness and may need recovery: "${message}"`
+    case 'energized':
+      return `User feels energized and ready for more: "${message}"`
+    default:
+      return undefined
+  }
 }

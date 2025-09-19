@@ -2,7 +2,8 @@
 
 import { createContext, useContext, useEffect, useMemo, useReducer, useRef } from 'react'
 
-import type { CoachAction, CoachContextValue, CoachState, MacroBreakdown } from '@/lib/types'
+import { fetchDaySnapshot, fetchUserProfile } from '@/lib/api/client'
+import type { CoachAction, CoachContextValue, CoachState, DaySnapshot, MacroBreakdown } from '@/lib/types'
 import type { ReactNode } from 'react'
 
 const STORAGE_KEY = 'coach-state-v1'
@@ -16,6 +17,8 @@ const DEFAULT_TARGETS: MacroBreakdown = {
 
 const defaultState: CoachState = {
   activeDate: new Date().toISOString().slice(0, 10),
+  userId: null,
+  profile: null,
   messages: [
     {
       id: 'welcome',
@@ -76,6 +79,20 @@ function coachReducer(state: CoachState, action: CoachAction): CoachState {
       return { ...state, weeklyPlan: action.plan }
     case 'setTargets':
       return { ...state, targets: action.targets }
+    case 'syncDay':
+      return syncDayReducer(state, action.payload)
+    case 'setProfile':
+      return { ...state, profile: action.profile }
+    case 'setUser':
+      if (state.userId === action.userId) {
+        return state
+      }
+      return {
+        ...defaultState,
+        userId: action.userId,
+        activeDate: state.activeDate,
+        profile: null,
+      }
     default:
       return state
   }
@@ -99,6 +116,8 @@ interface CoachProviderProps {
 export function CoachProvider({ children }: CoachProviderProps) {
   const [state, dispatch] = useReducer(coachReducer, defaultState)
   const hydratedRef = useRef(false)
+  const fetchedDatesRef = useRef<Set<string>>(new Set())
+  const fetchedProfileRef = useRef<string | null>(null)
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -121,6 +140,7 @@ export function CoachProvider({ children }: CoachProviderProps) {
           workouts: parsed.workouts ?? defaultState.workouts,
           weeklyPlan: parsed.weeklyPlan ?? defaultState.weeklyPlan,
           targets: parsed.targets ?? defaultState.targets,
+          profile: parsed.profile ?? null,
         },
       })
     } catch (error) {
@@ -135,6 +155,48 @@ export function CoachProvider({ children }: CoachProviderProps) {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state))
   }, [state])
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    if (!state.userId) return
+    const date = state.activeDate
+    if (!date || fetchedDatesRef.current.has(`${state.userId}-${date}`)) return
+
+    let cancelled = false
+    fetchedDatesRef.current.add(`${state.userId}-${date}`)
+
+    void fetchDaySnapshot(date).then((snapshot) => {
+      if (cancelled || !snapshot) return
+      dispatch({ type: 'syncDay', payload: snapshot })
+    })
+
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.activeDate, state.userId])
+
+  useEffect(() => {
+    fetchedDatesRef.current = new Set()
+    fetchedProfileRef.current = null
+  }, [state.userId])
+
+  useEffect(() => {
+    if (!state.userId) return
+    if (fetchedProfileRef.current === state.userId) return
+
+    let cancelled = false
+    fetchedProfileRef.current = state.userId
+
+    void fetchUserProfile().then((profile) => {
+      if (cancelled) return
+      dispatch({ type: 'setProfile', profile })
+    })
+
+    return () => {
+      cancelled = true
+    }
+  }, [state.userId])
+
   const value = useMemo(() => ({ state, dispatch }), [state])
 
   return <CoachContext.Provider value={value}>{children}</CoachContext.Provider>
@@ -146,4 +208,23 @@ export function useCoachStore() {
     throw new Error('useCoachStore must be used within a CoachProvider')
   }
   return context
+}
+
+function syncDayReducer(state: CoachState, snapshot: DaySnapshot): CoachState {
+  const mealsExcludingDate = state.meals.filter((meal) => meal.date !== snapshot.date)
+  const workoutsExcludingDate = state.workouts.filter((workout) => workout.date !== snapshot.date)
+
+  const sortedMeals = [...mealsExcludingDate, ...snapshot.meals].sort((a, b) =>
+    a.createdAt.localeCompare(b.createdAt),
+  )
+  const sortedWorkouts = [...workoutsExcludingDate, ...snapshot.workouts].sort((a, b) =>
+    a.createdAt.localeCompare(b.createdAt),
+  )
+
+  return {
+    ...state,
+    meals: sortedMeals,
+    workouts: sortedWorkouts,
+    targets: snapshot.targets ?? state.targets,
+  }
 }

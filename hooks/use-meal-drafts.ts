@@ -5,6 +5,7 @@ import { useCallback } from 'react'
 import { confirmMealOnServer } from '@/lib/api/client'
 import { useCoachStore } from '@/lib/state/coach-store'
 import type { CoachMessage, MealDraft, MealLog } from '@/lib/types'
+import { buildDayId } from '@/lib/utils'
 
 const emptyMacros = { calories: 0, protein: 0, fat: 0, carbs: 0 }
 
@@ -15,9 +16,16 @@ export function useMealDrafts() {
     async (draft: MealDraft) => {
       const now = new Date()
       const payloadMacros = draft.payload.macros
+      if (!state.userId) {
+        console.warn('Cannot confirm meal without an authenticated user')
+        return
+      }
+
+      const dayId = buildDayId(state.userId, state.activeDate)
+
       const meal: MealLog = {
         id: crypto.randomUUID(),
-        dayId: state.activeDate,
+        dayId,
         date: state.activeDate,
         type: draft.payload.type ?? 'snack',
         items: draft.payload.items ?? [draft.payload.originalText],
@@ -36,16 +44,18 @@ export function useMealDrafts() {
 
       void confirmMealOnServer(draft.id, meal)
 
+      const mealSummary = `${meal.type ?? 'Meal'}: ${meal.items.join(', ')} (~${Math.round(meal.macros.protein)}g protein / ${Math.round(meal.macros.calories)} cal)`
+
       const coachMessage: CoachMessage = {
         id: crypto.randomUUID(),
         role: 'coach',
-        content: 'Logged. I’ll keep an eye on your totals as the day moves along.',
+        content: `Meal logged: ${mealSummary}. Did I miss anything you want to adjust?`,
         createdAt: new Date().toISOString(),
       }
 
       dispatch({ type: 'addMessage', message: coachMessage })
     },
-    [dispatch, state.activeDate],
+    [dispatch, state.activeDate, state.userId],
   )
 
   const dismissDraft = useCallback(

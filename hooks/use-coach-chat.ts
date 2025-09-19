@@ -48,7 +48,7 @@ export function useCoachChat(): UseCoachChatResult {
           dispatch({ type: 'addMealDraft', draft: result.mealDraft })
         }
 
-        if (result.workoutLog) {
+        if (result.workoutLog && state.userId) {
           dispatch({ type: 'upsertWorkout', workout: result.workoutLog })
           void persistWorkoutOnServer(result.workoutLog)
         }

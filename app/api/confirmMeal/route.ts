@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 
-import { getSupabaseServiceRoleClient } from '@/lib/supabase/server'
+import { getSupabaseRouteClient } from '@/lib/supabase/server'
+import { buildDayId } from '@/lib/utils'
 
 export async function POST(request: Request) {
   const body = await request.json().catch(() => null)
@@ -9,40 +10,53 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Missing draftId or meal payload' }, { status: 400 })
   }
 
+  const supabase = getSupabaseRouteClient()
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser()
+
+  if (authError || !user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
   const meal = body.meal
-  const userId = body.userId ?? 'local-user'
-  const supabase = tryGetServiceClient()
+  const dayId = buildDayId(user.id, meal.date)
 
-  if (supabase) {
-    // Fire-and-forget persistence; failures fall back to local state.
-    const dayId = meal.dayId ?? `${userId}-${meal.date}`
+  const { error: dayError } = await supabase
+    .from('days')
+    .upsert({ id: dayId, user_id: user.id, date: meal.date })
 
-    await supabase
-      .from('days')
-      .upsert({ id: dayId, user_id: userId, date: meal.date })
-      .throwOnError()
-
-    await supabase
-      .from('meals')
-      .upsert({
-        id: meal.id,
-        day_id: dayId,
-        type: meal.type,
-        items_json: meal.items,
-        macros_json: meal.macros,
-        source: 'est',
-      })
-      .throwOnError()
+  if (dayError) {
+    console.error('[api/confirmMeal] failed to upsert day', dayError)
+    return NextResponse.json({ error: 'Failed to save meal' }, { status: 500 })
   }
 
-  return NextResponse.json({ status: 'ok', meal })
-}
+  const { data: upsertedMeal, error: mealError } = await supabase
+    .from('meals')
+    .upsert({
+      id: meal.id,
+      day_id: dayId,
+      type: meal.type,
+      items_json: meal.items,
+      macros_json: meal.macros,
+      source: meal.source ?? 'text',
+    })
+    .select('*')
+    .maybeSingle()
 
-function tryGetServiceClient() {
-  try {
-    return getSupabaseServiceRoleClient()
-  } catch (error) {
-    console.warn('Supabase service client unavailable, skipping persistence', error)
-    return null
+  if (mealError) {
+    console.error('[api/confirmMeal] failed to upsert meal', mealError)
+    return NextResponse.json({ error: 'Failed to save meal' }, { status: 500 })
   }
+
+  return NextResponse.json({
+    status: 'ok',
+    meal: {
+      ...meal,
+      dayId,
+      createdAt: upsertedMeal?.created_at ?? meal.createdAt,
+    },
+    userId: user.id,
+  })
 }

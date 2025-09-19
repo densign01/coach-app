@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 
-import { getSupabaseServiceRoleClient } from '@/lib/supabase/server'
+import { getSupabaseRouteClient } from '@/lib/supabase/server'
+import { buildDayId } from '@/lib/utils'
 
 export async function POST(request: Request) {
   const body = await request.json().catch(() => null)
@@ -9,27 +10,42 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Missing meal payload' }, { status: 400 })
   }
 
-  const supabase = tryGetServiceClient()
-  if (supabase) {
-    const { meal, userId = 'local-user' } = body
-    const dayId = meal.dayId ?? `${userId}-${meal.date}`
+  const supabase = getSupabaseRouteClient()
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser()
 
-    await supabase
-      .from('days')
-      .upsert({ id: dayId, user_id: userId, date: meal.date })
-      .throwOnError()
+  if (authError || !user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
 
-    await supabase
-      .from('meals')
-      .insert({
-        id: meal.id,
-        day_id: dayId,
-        type: meal.type,
-        items_json: meal.items,
-        macros_json: meal.macros,
-        source: meal.source ?? 'est',
-      })
-      .throwOnError()
+  const meal = body.meal
+  const dayId = buildDayId(user.id, meal.date)
+
+  const { error: dayError } = await supabase
+    .from('days')
+    .upsert({ id: dayId, user_id: user.id, date: meal.date })
+
+  if (dayError) {
+    console.error('[api/meal POST] failed to upsert day', dayError)
+    return NextResponse.json({ error: 'Failed to save meal' }, { status: 500 })
+  }
+
+  const { error: insertError } = await supabase
+    .from('meals')
+    .insert({
+      id: meal.id,
+      day_id: dayId,
+      type: meal.type,
+      items_json: meal.items,
+      macros_json: meal.macros,
+      source: meal.source ?? 'text',
+    })
+
+  if (insertError) {
+    console.error('[api/meal POST] failed to insert meal', insertError)
+    return NextResponse.json({ error: 'Failed to save meal' }, { status: 500 })
   }
 
   return NextResponse.json({ status: 'ok' })
@@ -42,28 +58,30 @@ export async function PUT(request: Request) {
     return NextResponse.json({ error: 'Missing meal id' }, { status: 400 })
   }
 
-  const supabase = tryGetServiceClient()
-  if (supabase) {
-    const { meal } = body
-    await supabase
-      .from('meals')
-      .update({
-        items_json: meal.items,
-        macros_json: meal.macros,
-        type: meal.type,
-      })
-      .eq('id', meal.id)
-      .throwOnError()
+  const supabase = getSupabaseRouteClient()
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser()
+
+  if (authError || !user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  const { meal } = body
+  const { error } = await supabase
+    .from('meals')
+    .update({
+      items_json: meal.items,
+      macros_json: meal.macros,
+      type: meal.type,
+    })
+    .eq('id', meal.id)
+
+  if (error) {
+    console.error('[api/meal PUT] failed to update meal', error)
+    return NextResponse.json({ error: 'Failed to update meal' }, { status: 500 })
   }
 
   return NextResponse.json({ status: 'ok' })
-}
-
-function tryGetServiceClient() {
-  try {
-    return getSupabaseServiceRoleClient()
-  } catch (error) {
-    console.warn('Supabase service client unavailable, skipping persistence', error)
-    return null
-  }
 }

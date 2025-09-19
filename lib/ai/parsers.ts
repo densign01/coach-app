@@ -53,7 +53,7 @@ export async function parseMealFromText(text: string): Promise<ParsedMealResult>
 }
 
 async function callOpenAIParser(apiKey: string, text: string) {
-  const response = await fetch('https://api.openai.com/v1/responses', {
+  const response = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -61,9 +61,17 @@ async function callOpenAIParser(apiKey: string, text: string) {
     },
     body: JSON.stringify({
       model: 'gpt-4o-mini',
-      input: `Extract meal items and macro estimates from the following user text. Respond only with valid JSON matching the schema {"mealType":"breakfast|lunch|dinner|snack","items":["string"],"macros":{"calories":number,"protein":number,"fat":number,"carbs":number}}. Use realistic estimates but keep it directional.
-
-Input: ${text}`,
+      messages: [
+        {
+          role: 'system',
+          content: 'Extract meal items and macro estimates from user text. Respond only with valid JSON matching this schema: {"mealType":"breakfast|lunch|dinner|snack","items":["string"],"macros":{"calories":number,"protein":number,"fat":number,"carbs":number}}. Use realistic estimates.'
+        },
+        {
+          role: 'user',
+          content: text
+        }
+      ],
+      temperature: 0.1,
     }),
   })
 
@@ -72,8 +80,12 @@ Input: ${text}`,
   }
 
   const data = await response.json()
-  const outputText = Array.isArray(data.output_text) ? data.output_text.join('') : data.output_text
-  const parsed = typeof outputText === 'string' ? JSON.parse(outputText) : data
+  const content = data.choices?.[0]?.message?.content
+  if (!content) {
+    throw new Error('No content in OpenAI response')
+  }
+
+  const parsed = JSON.parse(content)
   return responseSchema.parse(parsed)
 }
 
