@@ -23,8 +23,12 @@ export function ProfileMenu({ username }: ProfileMenuProps) {
   }, [session?.user?.email, username])
 
   const handleProfileClick = () => {
-    console.log('Profile clicked - navigating to /profile')
-    router.push('/profile')
+    try {
+      console.log('Profile clicked - navigating to /profile')
+      router.push('/profile')
+    } catch (error) {
+      console.error('Profile navigation error:', error)
+    }
   }
 
   const handleSignOut = async () => {
