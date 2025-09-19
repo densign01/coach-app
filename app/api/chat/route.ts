@@ -73,7 +73,7 @@ Respond with 2–4 sentences. Start with encouragement or empathy, then offer a 
         Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: 'gpt-4o-mini',
+        model: 'gpt-5-mini',
         input: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userPrompt },
