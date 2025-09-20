@@ -5,8 +5,10 @@ import { buildDayId } from '@/lib/utils'
 
 export async function POST(request: Request) {
   const body = await request.json().catch(() => null)
+  console.log('[api/confirmMeal] Received body:', JSON.stringify(body, null, 2))
 
   if (!body?.draftId || !body?.meal) {
+    console.log('[api/confirmMeal] Missing draftId or meal payload')
     return NextResponse.json({ error: 'Missing draftId or meal payload' }, { status: 400 })
   }
 
@@ -22,6 +24,8 @@ export async function POST(request: Request) {
 
   const meal = body.meal
   const dayId = buildDayId(user.id, meal.date)
+  console.log('[api/confirmMeal] Processing meal:', JSON.stringify(meal, null, 2))
+  console.log('[api/confirmMeal] Day ID:', dayId)
 
   const { error: dayError } = await supabase
     .from('days')
