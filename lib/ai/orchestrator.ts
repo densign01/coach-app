@@ -69,7 +69,10 @@ async function handleMealLogging(text: string, state: CoachState): Promise<Coach
   const parsed = draftFromApi
     ? {
         mealType: (draftFromApi.mealType ?? 'snack') as MealType,
-        items: draftFromApi.items,
+        items: draftFromApi.items.map((item) => ({
+          name: item.name,
+          macros: parsedMacros(item.macros),
+        })),
         macros: parsedMacros(draftFromApi.macros),
         confidence: draftFromApi.confidence,
       }
@@ -81,29 +84,19 @@ async function handleMealLogging(text: string, state: CoachState): Promise<Coach
   const groupId = crypto.randomUUID()
   const now = new Date().toISOString()
 
-  const foodItemDrafts: FoodItemDraft[] = parsed.items.map((item, index) => {
-    // Calculate per-item macros (simple division for now, could be improved with AI per-item estimation)
-    const itemMacros: MacroBreakdown = {
-      calories: Math.round(parsed.macros.calories / parsed.items.length),
-      protein: Math.round(parsed.macros.protein / parsed.items.length),
-      fat: Math.round(parsed.macros.fat / parsed.items.length),
-      carbs: Math.round(parsed.macros.carbs / parsed.items.length),
-    }
-
-    return {
-      id: crypto.randomUUID(),
-      createdAt: now,
-      mealType: parsed.mealType,
-      groupId,
-      payload: {
-        item: item.trim(),
-        macros: itemMacros,
-        confidence: parsed.confidence,
-        source: 'text',
-        originalText: text,
-      }
-    }
-  })
+  const foodItemDrafts: FoodItemDraft[] = parsed.items.map((item) => ({
+    id: crypto.randomUUID(),
+    createdAt: now,
+    mealType: parsed.mealType,
+    groupId,
+    payload: {
+      item: item.name,
+      macros: item.macros,
+      confidence: parsed.confidence,
+      source: 'text',
+      originalText: text,
+    },
+  }))
 
   console.log('[ORCHESTRATOR] Created food item drafts:', foodItemDrafts)
 
@@ -111,7 +104,7 @@ async function handleMealLogging(text: string, state: CoachState): Promise<Coach
   const todaysTotals = calculateDailyTotals(state.meals.filter((meal) => meal.date === state.activeDate))
   const projectedTotals = addMacros(todaysTotals, totalMacros)
 
-  const itemsList = foodItemDrafts.map(draft => draft.payload.item).join(', ')
+  const itemsList = parsed.items.map((item) => item.name).join(', ')
   const mealSummary = `${itemsList} (~${Math.round(totalMacros.protein)}g protein / ${Math.round(totalMacros.calories)} cal)`
 
   const aiResponse = await generateCoachResponse({

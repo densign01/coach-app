@@ -2,15 +2,22 @@ import { z } from 'zod'
 
 import type { MacroBreakdown, MealType } from '@/lib/types'
 
+const macrosSchema = z.object({
+  calories: z.number().nonnegative(),
+  protein: z.number().nonnegative(),
+  fat: z.number().nonnegative(),
+  carbs: z.number().nonnegative(),
+})
+
+const itemSchema = z.object({
+  name: z.string().min(1),
+  macros: macrosSchema,
+})
+
 const responseSchema = z.object({
   mealType: z.enum(['breakfast', 'lunch', 'dinner', 'snack']).optional(),
-  items: z.array(z.string()).min(1),
-  macros: z.object({
-    calories: z.number().nonnegative(),
-    protein: z.number().nonnegative(),
-    fat: z.number().nonnegative(),
-    carbs: z.number().nonnegative(),
-  }),
+  items: z.array(z.union([itemSchema, z.string().min(1)])).min(1),
+  macros: macrosSchema.optional(),
 })
 
 const fallbackMacros: Record<string, MacroBreakdown> = {
@@ -26,9 +33,14 @@ const fallbackMacros: Record<string, MacroBreakdown> = {
   pasta: { calories: 480, protein: 18, fat: 12, carbs: 70 },
 }
 
+export interface ParsedMealItem {
+  name: string
+  macros: MacroBreakdown
+}
+
 export interface ParsedMealResult {
   mealType: MealType
-  items: string[]
+  items: ParsedMealItem[]
   macros: MacroBreakdown
   confidence: 'low' | 'medium' | 'high'
 }
@@ -71,7 +83,8 @@ async function callOpenAIParser(apiKey: string, text: string) {
       messages: [
         {
           role: 'system',
-          content: 'Extract only the actual food items and their macro estimates from user text. Ignore conversational phrases, ignore text like "for breakfast today" or "I had". Focus only on the foods eaten. Items should be specific foods like "2 eggs", "1 cup oatmeal", not conversation text. Respond only with valid JSON matching this schema: {"mealType":"breakfast|lunch|dinner|snack","items":["string"],"macros":{"calories":number,"protein":number,"fat":number,"carbs":number}}. Use realistic macro estimates.'
+          content:
+            'Extract just the food items and their macro estimates from the user text. Ignore conversational phrasing. Respond only with JSON: {"mealType":"breakfast|lunch|dinner|snack","items":[{"name":"string","macros":{"calories":number,"protein":number,"fat":number,"carbs":number}}],"macros":{"calories":number,"protein":number,"fat":number,"carbs":number}}. Ensure per-item macros are realistic and totals roughly match the sum.'
         },
         {
           role: 'user',
@@ -92,8 +105,30 @@ async function callOpenAIParser(apiKey: string, text: string) {
     throw new Error('No content in OpenAI response')
   }
 
-  const parsed = JSON.parse(content)
-  return responseSchema.parse(parsed)
+  const parsed = responseSchema.parse(JSON.parse(content))
+
+  const normalizedItems = parsed.items.map((entry) =>
+    typeof entry === 'string'
+      ? {
+          name: entry.trim(),
+          macros: estimateItemMacros(entry),
+        }
+      : {
+          name: entry.name.trim(),
+          macros: normalizeMacros(entry.macros),
+        },
+  )
+
+  const totalMacros = parsed.macros
+    ? normalizeMacros(parsed.macros)
+    : normalizeMacrosFromItems(normalizedItems)
+
+  return {
+    mealType: (parsed.mealType ?? inferMealType(text)) as MealType,
+    items: normalizedItems,
+    macros: totalMacros,
+    confidence: 'high',
+  }
 }
 
 function heuristicMealParser(text: string): ParsedMealResult {
@@ -134,28 +169,12 @@ function heuristicMealParser(text: string): ParsedMealResult {
     .filter(part => part.length > 0)
 
   console.log('[HEURISTIC_PARSER] Split parts:', parts)
-  const items = parts.length > 0 ? parts : ['meal']
+  const items = (parts.length > 0 ? parts : ['meal']).map((item) => ({
+    name: item,
+    macros: estimateItemMacros(item),
+  }))
 
-  const macros = items.reduce<MacroBreakdown>((acc, item) => {
-    const key = Object.keys(fallbackMacros).find((food) => item.includes(food))
-    if (!key) {
-      return {
-        calories: acc.calories + 250,
-        protein: acc.protein + 12,
-        fat: acc.fat + 8,
-        carbs: acc.carbs + 28,
-      }
-    }
-
-    const estimate = fallbackMacros[key]
-    return {
-      calories: acc.calories + estimate.calories,
-      protein: acc.protein + estimate.protein,
-      fat: acc.fat + estimate.fat,
-      carbs: acc.carbs + estimate.carbs,
-    }
-  },
-  { calories: 0, protein: 0, fat: 0, carbs: 0 })
+  const macros = normalizeMacrosFromItems(items)
 
   return {
     mealType: inferMealType(text),
@@ -177,4 +196,39 @@ function inferMealType(text: string): MealType {
   if (hour < 15) return 'lunch'
   if (hour < 20) return 'dinner'
   return 'snack'
+}
+
+function estimateItemMacros(item: string): MacroBreakdown {
+  const key = Object.keys(fallbackMacros).find((food) => item.includes(food))
+  if (!key) {
+    return {
+      calories: 250,
+      protein: 12,
+      fat: 8,
+      carbs: 28,
+    }
+  }
+
+  return fallbackMacros[key]
+}
+
+function normalizeMacros(value: MacroBreakdown | undefined): MacroBreakdown {
+  return {
+    calories: Number(value?.calories ?? 0),
+    protein: Number(value?.protein ?? 0),
+    fat: Number(value?.fat ?? 0),
+    carbs: Number(value?.carbs ?? 0),
+  }
+}
+
+function normalizeMacrosFromItems(items: ParsedMealItem[]): MacroBreakdown {
+  return items.reduce<MacroBreakdown>(
+    (acc, item) => ({
+      calories: acc.calories + item.macros.calories,
+      protein: acc.protein + item.macros.protein,
+      fat: acc.fat + item.macros.fat,
+      carbs: acc.carbs + item.macros.carbs,
+    }),
+    { calories: 0, protein: 0, fat: 0, carbs: 0 },
+  )
 }

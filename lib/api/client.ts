@@ -12,9 +12,19 @@ import type {
 import type { Database } from '@/lib/supabase/schema'
 import { buildDayId } from '@/lib/utils'
 
+export interface ApiMealItem {
+  name: string
+  macros: {
+    calories: number
+    protein: number
+    fat: number
+    carbs: number
+  }
+}
+
 export interface ApiMealDraft {
   mealType: string
-  items: string[]
+  items: ApiMealItem[]
   macros: {
     calories: number
     protein: number
