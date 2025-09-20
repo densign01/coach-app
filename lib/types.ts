@@ -64,6 +64,21 @@ export interface UserProfile {
   updatedAt?: string | null
 }
 
+export interface FoodItemDraft {
+  id: string
+  createdAt: string
+  mealType: MealType
+  groupId: string // Links items from same meal input
+  payload: {
+    item: string // Single food item like "2 eggs" or "1/2 cup cottage cheese"
+    macros: MacroBreakdown
+    confidence: 'low' | 'medium' | 'high'
+    source: 'text'
+    originalText: string // The full original input text
+  }
+}
+
+// Keep old interface for backward compatibility
 export interface MealDraft {
   id: string
   createdAt: string
@@ -121,6 +136,7 @@ export interface CoachState {
   profileLoaded: boolean
   messages: CoachMessage[]
   mealDrafts: MealDraft[]
+  foodItemDrafts: FoodItemDraft[] // New individual food item drafts
   meals: MealLog[]
   workouts: WorkoutLog[]
   weeklyPlan: WeeklyPlanEntry[]
@@ -133,6 +149,10 @@ export type CoachAction =
   | { type: 'replaceMessages'; messages: CoachMessage[] }
   | { type: 'addMealDraft'; draft: MealDraft }
   | { type: 'removeMealDraft'; draftId: string }
+  | { type: 'addFoodItemDrafts'; drafts: FoodItemDraft[] } // Add multiple food items at once
+  | { type: 'removeFoodItemDraft'; draftId: string }
+  | { type: 'updateFoodItemDraft'; draftId: string; updates: Partial<FoodItemDraft['payload']> }
+  | { type: 'confirmFoodItemDraft'; draftId: string } // Convert food item to meal log
   | { type: 'upsertMeal'; meal: MealLog }
   | { type: 'removeMeal'; mealId: string }
   | { type: 'upsertWorkout'; workout: WorkoutLog }

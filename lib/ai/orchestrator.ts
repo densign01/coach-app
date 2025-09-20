@@ -12,12 +12,13 @@ import {
   generateProfileSummary,
 } from '@/lib/ai/onboarding'
 import { calculateDailyTotals, getDaySummary, getUpcomingPlan, getWeeklyWorkoutStats } from '@/lib/data/queries'
-import type { CoachState, MealDraft, MacroBreakdown, MealType, WorkoutLog, UserProfile } from '@/lib/types'
+import type { CoachState, MealDraft, FoodItemDraft, MacroBreakdown, MealType, WorkoutLog, UserProfile } from '@/lib/types'
 import { buildDayId } from '@/lib/utils'
 
 interface CoachReply {
   coachMessage: string
   mealDraft?: MealDraft
+  foodItemDrafts?: FoodItemDraft[]
   workoutLog?: WorkoutLog
   profileUpdate?: UserProfile
 }
@@ -74,23 +75,44 @@ async function handleMealLogging(text: string, state: CoachState): Promise<Coach
       }
     : await parseMealFromText(text)
 
-  const draft: MealDraft = {
-    id: crypto.randomUUID(),
-    createdAt: new Date().toISOString(),
-    payload: {
-      type: parsed.mealType,
-      items: parsed.items,
-      macros: parsed.macros,
-      originalText: text,
-      confidence: parsed.confidence,
-      source: 'text',
-    },
-  }
+  console.log('[ORCHESTRATOR] Parsed meal result:', parsed)
 
+  // Create individual food item drafts instead of one big meal draft
+  const groupId = crypto.randomUUID()
+  const now = new Date().toISOString()
+
+  const foodItemDrafts: FoodItemDraft[] = parsed.items.map((item, index) => {
+    // Calculate per-item macros (simple division for now, could be improved with AI per-item estimation)
+    const itemMacros: MacroBreakdown = {
+      calories: Math.round(parsed.macros.calories / parsed.items.length),
+      protein: Math.round(parsed.macros.protein / parsed.items.length),
+      fat: Math.round(parsed.macros.fat / parsed.items.length),
+      carbs: Math.round(parsed.macros.carbs / parsed.items.length),
+    }
+
+    return {
+      id: crypto.randomUUID(),
+      createdAt: now,
+      mealType: parsed.mealType,
+      groupId,
+      payload: {
+        item: item.trim(),
+        macros: itemMacros,
+        confidence: parsed.confidence,
+        source: 'text',
+        originalText: text,
+      }
+    }
+  })
+
+  console.log('[ORCHESTRATOR] Created food item drafts:', foodItemDrafts)
+
+  const totalMacros = parsed.macros
   const todaysTotals = calculateDailyTotals(state.meals.filter((meal) => meal.date === state.activeDate))
-  const projectedTotals = addMacros(todaysTotals, parsed.macros)
+  const projectedTotals = addMacros(todaysTotals, totalMacros)
 
-  const mealSummary = `${parsed.items.join(', ')} (~${Math.round(parsed.macros.protein)}g protein / ${Math.round(parsed.macros.calories)} cal)`
+  const itemsList = foodItemDrafts.map(draft => draft.payload.item).join(', ')
+  const mealSummary = `${itemsList} (~${Math.round(totalMacros.protein)}g protein / ${Math.round(totalMacros.calories)} cal)`
 
   const aiResponse = await generateCoachResponse({
     userMessage: text,
@@ -105,8 +127,8 @@ async function handleMealLogging(text: string, state: CoachState): Promise<Coach
 
   if (!coachMessage) {
     coachMessage = parsed.confidence === 'low'
-      ? "I can take a guess at that meal, but double-check the details before we log it."
-      : `Nice. That adds about ${parsed.macros.protein.toFixed(0)}g protein and ${parsed.macros.calories.toFixed(0)} calories. Projected today → ${projectedTotals.protein.toFixed(0)}g protein / ${projectedTotals.calories.toFixed(0)} cal. Does that look right?`
+      ? "I can take a guess at those foods, but double-check the details before we log them."
+      : `Nice. That adds about ${totalMacros.protein.toFixed(0)}g protein and ${totalMacros.calories.toFixed(0)} calories. Projected today → ${projectedTotals.protein.toFixed(0)}g protein / ${projectedTotals.calories.toFixed(0)} cal. Look good?`
   }
 
   let profileUpdate: UserProfile | undefined
@@ -119,7 +141,7 @@ async function handleMealLogging(text: string, state: CoachState): Promise<Coach
 
   return {
     coachMessage,
-    mealDraft: draft,
+    foodItemDrafts,
     profileUpdate,
   }
 }

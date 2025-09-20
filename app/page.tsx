@@ -14,9 +14,10 @@ import { ProfileMenu } from "@/components/profile-menu"
 
 import { useCoachChat } from "@/hooks/use-coach-chat"
 import { useMealDrafts } from "@/hooks/use-meal-drafts"
+import { useFoodItemDrafts } from "@/hooks/use-food-item-drafts"
 import { useCoachStore } from "@/lib/state/coach-store"
 import { calculateDailyTotals, getMealsByType, getMealsForDate, getWorkoutsForDate, getWeeklyWorkoutStats } from "@/lib/data/queries"
-import type { MealDraft, Tab } from "@/lib/types"
+import type { MealDraft, FoodItemDraft, Tab } from "@/lib/types"
 
 export default function CoachApp() {
   const router = useRouter()
@@ -28,6 +29,7 @@ export default function CoachApp() {
   const { messages, sendMessage, isProcessing, error } = useCoachChat()
   const { state } = useCoachStore()
   const { drafts, confirmDraft, dismissDraft } = useMealDrafts()
+  const { drafts: foodItemDrafts, confirmFoodItem, dismissFoodItem, updateFoodItem } = useFoodItemDrafts()
 
   useEffect(() => {
     if (!isSessionLoading && !session) {
@@ -40,7 +42,7 @@ export default function CoachApp() {
     if (messagesEndRef.current) {
       messagesEndRef.current.scrollIntoView({ behavior: 'smooth' })
     }
-  }, [messages, drafts, activeTab])
+  }, [messages, drafts, foodItemDrafts, activeTab])
 
   const todaysMeals = useMemo(
     () => getMealsForDate(state.meals, state.activeDate),
@@ -121,6 +123,20 @@ export default function CoachApp() {
                     draft={draft}
                     onConfirm={() => void confirmDraft(draft)}
                     onDismiss={() => dismissDraft(draft.id)}
+                  />
+                ))}
+              </div>
+            ) : null}
+
+            {foodItemDrafts.length > 0 ? (
+              <div className="space-y-2">
+                {foodItemDrafts.map((draft) => (
+                  <FoodItemDraftCard
+                    key={draft.id}
+                    draft={draft}
+                    onConfirm={() => void confirmFoodItem(draft)}
+                    onDismiss={() => dismissFoodItem(draft.id)}
+                    onUpdate={(updates) => updateFoodItem(draft.id, updates)}
                   />
                 ))}
               </div>
@@ -433,6 +449,63 @@ function MealDraftCard({ draft, onConfirm, onDismiss }: MealDraftCardProps) {
           Edit later
         </Button>
         <Button onClick={onConfirm}>Looks good</Button>
+      </div>
+    </Card>
+  )
+}
+
+interface FoodItemDraftCardProps {
+  draft: FoodItemDraft
+  onConfirm: () => void
+  onDismiss: () => void
+  onUpdate: (updates: Partial<FoodItemDraft['payload']>) => void
+}
+
+function FoodItemDraftCard({ draft, onConfirm, onDismiss, onUpdate }: FoodItemDraftCardProps) {
+  const macros = draft.payload.macros
+  const confidence = draft.payload.confidence
+
+  return (
+    <Card className="p-4 border-dashed border-blue-300/60 bg-blue-50/30">
+      <div className="flex justify-between items-start">
+        <div className="flex-1">
+          <p className="text-sm font-semibold text-blue-900">Add this food item?</p>
+          <p className="text-sm text-blue-800 mt-1 font-medium">{draft.payload.item}</p>
+          <p className="text-xs text-blue-600/80 mt-1">
+            {draft.mealType.charAt(0).toUpperCase() + draft.mealType.slice(1)} • Confidence: {confidence.toUpperCase()}
+          </p>
+        </div>
+        <Button variant="ghost" size="sm" onClick={onDismiss} className="text-blue-600 hover:text-blue-800">
+          ✕
+        </Button>
+      </div>
+
+      <div className="grid grid-cols-4 gap-3 text-center text-xs mt-4 p-2 bg-white/50 rounded">
+        <div>
+          <p className="font-semibold text-blue-900">{macros.calories}</p>
+          <p className="text-blue-600">cal</p>
+        </div>
+        <div>
+          <p className="font-semibold text-blue-900">{macros.protein}g</p>
+          <p className="text-blue-600">protein</p>
+        </div>
+        <div>
+          <p className="font-semibold text-blue-900">{macros.fat}g</p>
+          <p className="text-blue-600">fat</p>
+        </div>
+        <div>
+          <p className="font-semibold text-blue-900">{macros.carbs}g</p>
+          <p className="text-blue-600">carbs</p>
+        </div>
+      </div>
+
+      <div className="flex justify-end gap-2 mt-4">
+        <Button variant="outline" size="sm" onClick={onDismiss} className="border-blue-200 text-blue-700 hover:bg-blue-50">
+          Skip
+        </Button>
+        <Button size="sm" onClick={onConfirm} className="bg-blue-600 hover:bg-blue-700">
+          Add it
+        </Button>
       </div>
     </Card>
   )

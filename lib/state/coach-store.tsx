@@ -3,7 +3,8 @@
 import { createContext, useContext, useEffect, useMemo, useReducer, useRef } from 'react'
 
 import { fetchDaySnapshot, fetchUserProfile, fetchChatHistory } from '@/lib/api/client'
-import type { CoachAction, CoachContextValue, CoachState, DaySnapshot, MacroBreakdown } from '@/lib/types'
+import type { CoachAction, CoachContextValue, CoachState, DaySnapshot, MacroBreakdown, MealLog } from '@/lib/types'
+import { buildDayId } from '@/lib/utils'
 import type { ReactNode } from 'react'
 
 const STORAGE_KEY = 'coach-state-v1'
@@ -30,6 +31,7 @@ const defaultState: CoachState = {
     },
   ],
   mealDrafts: [],
+  foodItemDrafts: [],
   meals: [],
   workouts: [],
   weeklyPlan: [
@@ -59,6 +61,39 @@ function coachReducer(state: CoachState, action: CoachAction): CoachState {
       return { ...state, mealDrafts: [...state.mealDrafts, action.draft] }
     case 'removeMealDraft':
       return { ...state, mealDrafts: state.mealDrafts.filter((draft) => draft.id !== action.draftId) }
+    case 'addFoodItemDrafts':
+      return { ...state, foodItemDrafts: [...state.foodItemDrafts, ...action.drafts] }
+    case 'removeFoodItemDraft':
+      return { ...state, foodItemDrafts: state.foodItemDrafts.filter((draft) => draft.id !== action.draftId) }
+    case 'updateFoodItemDraft':
+      return {
+        ...state,
+        foodItemDrafts: state.foodItemDrafts.map((draft) =>
+          draft.id === action.draftId ? { ...draft, payload: { ...draft.payload, ...action.updates } } : draft
+        ),
+      }
+    case 'confirmFoodItemDraft': {
+      // Convert food item draft to meal log and remove the draft
+      const draft = state.foodItemDrafts.find((d) => d.id === action.draftId)
+      if (!draft || !state.userId) return state
+
+      const meal: MealLog = {
+        id: crypto.randomUUID(),
+        dayId: buildDayId(state.userId, state.activeDate),
+        date: state.activeDate,
+        type: draft.mealType,
+        items: [draft.payload.item],
+        macros: draft.payload.macros,
+        source: draft.payload.source,
+        createdAt: new Date().toISOString(),
+      }
+
+      return {
+        ...state,
+        meals: upsertById(state.meals, meal),
+        foodItemDrafts: state.foodItemDrafts.filter((d) => d.id !== action.draftId),
+      }
+    }
     case 'upsertMeal':
       return {
         ...state,
