@@ -35,12 +35,12 @@ export default function CoachApp() {
     }
   }, [isSessionLoading, session, router])
 
-  // Auto-scroll to bottom when messages change
+  // Auto-scroll to bottom when messages change or when switching to home tab
   useEffect(() => {
     if (messagesEndRef.current) {
       messagesEndRef.current.scrollIntoView({ behavior: 'smooth' })
     }
-  }, [messages, drafts])
+  }, [messages, drafts, activeTab])
 
   const todaysMeals = useMemo(
     () => getMealsForDate(state.meals, state.activeDate),
@@ -319,7 +319,7 @@ export default function CoachApp() {
 
       <div className="border-t border-border bg-card">
         <div className="flex">
-          <NavButton icon={MessageCircle} label="Home" isActive={activeTab === "home"} onClick={() => setActiveTab("home")}
+          <NavButton icon={MessageCircle} label="Coach" isActive={activeTab === "home"} onClick={() => setActiveTab("home")}
           />
           <NavButton icon={Apple} label="Nutrition" isActive={activeTab === "nutrition"} onClick={() => setActiveTab("nutrition")}
           />
