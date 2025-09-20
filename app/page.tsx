@@ -155,7 +155,7 @@ export default function CoachApp() {
   )
 
   const renderNutritionTab = () => (
-    <div className="p-6 space-y-6">
+    <div className="h-full overflow-y-auto p-6 space-y-6 pb-24">
       <div>
         <h1 className="text-2xl font-semibold text-balance">Nutrition</h1>
         <p className="text-muted-foreground mt-1">Directional targets for today</p>
@@ -211,7 +211,7 @@ export default function CoachApp() {
   )
 
   const renderFitnessTab = () => (
-    <div className="p-6 space-y-6">
+    <div className="h-full overflow-y-auto p-6 space-y-6 pb-24">
       <div>
         <h1 className="text-2xl font-semibold text-balance">Fitness</h1>
         <p className="text-muted-foreground mt-1">Adaptive plan that counts every activity</p>
