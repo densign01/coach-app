@@ -39,8 +39,9 @@ export default function ProfilePage() {
     username: "",
     firstName: "",
     lastName: "",
-    heightCm: "",
-    weightKg: "",
+    heightFt: "",
+    heightIn: "",
+    weightLbs: "",
     age: "",
     gender: "",
     goals: "",
@@ -57,12 +58,26 @@ export default function ProfilePage() {
 
   useEffect(() => {
     if (!profile) return
+
+    // Convert height from cm to feet/inches
+    let heightFt = ""
+    let heightIn = ""
+    if (profile.heightCm) {
+      const totalInches = Math.round(profile.heightCm / 2.54)
+      heightFt = String(Math.floor(totalInches / 12))
+      heightIn = String(totalInches % 12)
+    }
+
+    // Convert weight from kg to lbs
+    const weightLbs = profile.weightKg ? String(Math.round(profile.weightKg * 2.205)) : ""
+
     setFormState({
       username: profile.username ?? "",
       firstName: profile.firstName ?? "",
       lastName: profile.lastName ?? "",
-      heightCm: profile.heightCm ? String(profile.heightCm) : "",
-      weightKg: profile.weightKg ? String(profile.weightKg) : "",
+      heightFt,
+      heightIn,
+      weightLbs,
       age: profile.age ? String(profile.age) : "",
       gender: profile.gender ?? "",
       goals: profile.goals ?? "",
@@ -88,14 +103,28 @@ export default function ProfilePage() {
 
     const genderLabel = genderOptions.find((option) => option.value === formState.gender)?.label ?? (formState.gender || null)
 
+    // Convert imperial back to metric for storage
+    let heightCm = null
+    if (formState.heightFt && formState.heightIn) {
+      const totalInches = (Number(formState.heightFt) * 12) + Number(formState.heightIn)
+      heightCm = Math.round(totalInches * 2.54)
+    } else if (formState.heightFt) {
+      const totalInches = Number(formState.heightFt) * 12
+      heightCm = Math.round(totalInches * 2.54)
+    }
+
+    const weightKg = formState.weightLbs ? Math.round(Number(formState.weightLbs) / 2.205 * 10) / 10 : null
+
     const payload = {
       userId: session?.user?.id ?? "",
-      ...formState,
       username: formState.username.trim() || usernameFallback,
-      heightCm: formState.heightCm ? Number(formState.heightCm) : null,
-      weightKg: formState.weightKg ? Number(formState.weightKg) : null,
+      firstName: formState.firstName,
+      lastName: formState.lastName,
+      heightCm,
+      weightKg,
       age: formState.age ? Number(formState.age) : null,
       gender: genderLabel,
+      goals: formState.goals,
       insights: profile?.insights ?? [],
       onboardingData: profile?.onboardingData ?? null,
       onboardingCompleted: profile?.onboardingCompleted ?? null,
@@ -152,11 +181,20 @@ export default function ProfilePage() {
             <Field label="Age">
               <Input value={formState.age} onChange={handleChange("age")} inputMode="numeric" placeholder="32" />
             </Field>
-            <Field label="Height (cm)">
-              <Input value={formState.heightCm} onChange={handleChange("heightCm")} inputMode="decimal" placeholder="170" />
+            <Field label="Height">
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <Input value={formState.heightFt} onChange={handleChange("heightFt")} inputMode="numeric" placeholder="5" />
+                  <p className="mt-1 text-xs text-muted-foreground">feet</p>
+                </div>
+                <div>
+                  <Input value={formState.heightIn} onChange={handleChange("heightIn")} inputMode="numeric" placeholder="8" />
+                  <p className="mt-1 text-xs text-muted-foreground">inches</p>
+                </div>
+              </div>
             </Field>
-            <Field label="Weight (kg)">
-              <Input value={formState.weightKg} onChange={handleChange("weightKg")} inputMode="decimal" placeholder="68" />
+            <Field label="Weight (lbs)">
+              <Input value={formState.weightLbs} onChange={handleChange("weightLbs")} inputMode="decimal" placeholder="150" />
             </Field>
             <Field label="Gender">
               <Select value={formState.gender || undefined} onValueChange={handleGenderChange}>

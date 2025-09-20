@@ -251,7 +251,7 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
   {
     id: 5,
     section: 'basics',
-    question: 'How tall are you? (cm or feet/inches both work)',
+    question: 'How tall are you? (feet and inches)',
     field: 'heightCm',
     type: 'text',
     required: true,
@@ -259,7 +259,7 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
   {
     id: 6,
     section: 'basics',
-    question: 'What do you currently weigh? (kg or lbs)',
+    question: 'What do you currently weigh? (pounds)',
     field: 'weightKg',
     type: 'text',
     required: true,
