@@ -94,7 +94,7 @@ export default function CoachApp() {
       </div>
 
       <div className="flex-1 overflow-hidden">
-        <div className="h-full overflow-y-auto p-6" ref={scrollAreaRef}>
+        <div className="h-full overflow-y-auto p-6">
           <div className="space-y-4 pb-28">
             {messages.map((message) => (
               <div key={message.id} className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}>
