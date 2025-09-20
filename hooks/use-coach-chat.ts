@@ -3,7 +3,7 @@
 import { useState, useCallback } from 'react'
 
 import { orchestrateCoachReply } from '@/lib/ai/orchestrator'
-import { persistWorkoutOnServer } from '@/lib/api/client'
+import { persistChatMessage, persistWorkoutOnServer } from '@/lib/api/client'
 import { useCoachStore } from '@/lib/state/coach-store'
 import type { CoachMessage, CoachState } from '@/lib/types'
 
@@ -33,6 +33,7 @@ export function useCoachChat(): UseCoachChatResult {
       }
 
       dispatch({ type: 'addMessage', message: userMessage })
+      void persistChatMessage(userMessage)
       setIsProcessing(true)
       setError(null)
 
@@ -65,6 +66,7 @@ export function useCoachChat(): UseCoachChatResult {
         }
 
         dispatch({ type: 'addMessage', message: coachMessage })
+        void persistChatMessage(coachMessage)
       } catch (err) {
         console.error('Failed to process coach message', err)
         setError('I had trouble processing that. Try again in a moment?')

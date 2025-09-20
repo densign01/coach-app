@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useEffect, useMemo, useReducer, useRef } from 'react'
 
-import { fetchDaySnapshot, fetchUserProfile } from '@/lib/api/client'
+import { fetchDaySnapshot, fetchUserProfile, fetchChatHistory } from '@/lib/api/client'
 import type { CoachAction, CoachContextValue, CoachState, DaySnapshot, MacroBreakdown } from '@/lib/types'
 import type { ReactNode } from 'react'
 
@@ -118,6 +118,7 @@ export function CoachProvider({ children }: CoachProviderProps) {
   const hydratedRef = useRef(false)
   const fetchedDatesRef = useRef<Set<string>>(new Set())
   const fetchedProfileRef = useRef<string | null>(null)
+  const loadedMessagesRef = useRef<string | null>(null)
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -178,6 +179,7 @@ export function CoachProvider({ children }: CoachProviderProps) {
   useEffect(() => {
     fetchedDatesRef.current = new Set()
     fetchedProfileRef.current = null
+    loadedMessagesRef.current = null
   }, [state.userId])
 
   useEffect(() => {
@@ -188,11 +190,12 @@ export function CoachProvider({ children }: CoachProviderProps) {
     fetchedProfileRef.current = state.userId
 
     void fetchUserProfile().then((profile) => {
-      if (cancelled) return
-      dispatch({ type: 'setProfile', profile })
+      console.log('normalized profile from API:', profile);
+      if (cancelled) return;
+      dispatch({ type: 'setProfile', profile });
 
-      // Update welcome message based on profile status
-      const needsOnboarding = !profile?.onboardingCompleted && (profile?.onboardingStep ?? 0) === 0
+      const needsOnboarding =
+        !profile?.onboardingCompleted && (profile?.onboardingStep ?? 0) === 0;
       if (needsOnboarding) {
         dispatch({
           type: 'replaceMessages',
@@ -200,12 +203,31 @@ export function CoachProvider({ children }: CoachProviderProps) {
             {
               id: 'welcome-onboarding',
               role: 'coach',
-              content: "Welcome! I'll ask a few quick questions to get to know you and tailor your plan.",
+              content:
+                "Welcome! I'll ask a few quick questions to get to know you and tailor your plan.",
               createdAt: new Date().toISOString(),
             },
           ],
-        })
+        });
       }
+    });
+
+
+    return () => {
+      cancelled = true
+    }
+  }, [state.userId])
+
+  useEffect(() => {
+    if (!state.userId) return
+    if (loadedMessagesRef.current === state.userId) return
+
+    let cancelled = false
+    loadedMessagesRef.current = state.userId
+
+    void fetchChatHistory().then((messages) => {
+      if (cancelled || !messages || messages.length === 0) return
+      dispatch({ type: 'replaceMessages', messages })
     })
 
     return () => {

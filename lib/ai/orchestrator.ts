@@ -96,6 +96,8 @@ async function handleMealLogging(text: string, state: CoachState): Promise<Coach
     state,
     mealDraftSummary: mealSummary,
     intent: 'meal_log',
+    profile: state.profile,
+    history: state.messages,
   })
 
   let coachMessage = aiResponse.message
@@ -151,6 +153,8 @@ async function handleWorkoutLogging(text: string, state: CoachState): Promise<Co
     state,
     workoutSummary,
     intent: 'workout_log',
+    profile: state.profile,
+    history: state.messages,
   })
 
   const coachMessage = aiResponse.message ?? defaultWorkoutMessage(workout, state)
@@ -229,6 +233,8 @@ async function buildGenerativeReply(
     state,
     energyNote,
     intent,
+    profile: state.profile,
+    history: state.messages,
   })
 
   let coachMessage = aiResponse.message
