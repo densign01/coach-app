@@ -2,7 +2,7 @@
 
 import { useCallback } from 'react'
 
-import { confirmMealOnServer } from '@/lib/api/client'
+import { confirmMealOnServer, fetchDaySnapshot } from '@/lib/api/client'
 import { useCoachStore } from '@/lib/state/coach-store'
 import type { CoachMessage, MealDraft, MealLog } from '@/lib/types'
 import { buildDayId } from '@/lib/utils'
@@ -42,7 +42,15 @@ export function useMealDrafts() {
       dispatch({ type: 'upsertMeal', meal })
       dispatch({ type: 'removeMealDraft', draftId: draft.id })
 
-      void confirmMealOnServer(draft.id, meal)
+      const result = await confirmMealOnServer(draft.id, meal)
+
+      // Refresh day data to ensure meal totals are updated
+      if (result.ok) {
+        const snapshot = await fetchDaySnapshot(state.activeDate)
+        if (snapshot) {
+          dispatch({ type: 'syncDay', payload: snapshot })
+        }
+      }
 
       const mealSummary = `${meal.type ?? 'Meal'}: ${meal.items.join(', ')} (~${Math.round(meal.macros.protein)}g protein / ${Math.round(meal.macros.calories)} cal)`
 
