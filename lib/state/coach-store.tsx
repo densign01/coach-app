@@ -219,8 +219,6 @@ export function CoachProvider({ children }: CoachProviderProps) {
       }
     });
 
-
-
     return () => {
       cancelled = true
     }
