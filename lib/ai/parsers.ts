@@ -34,10 +34,13 @@ export interface ParsedMealResult {
 }
 
 export async function parseMealFromText(text: string): Promise<ParsedMealResult> {
+  console.log('[MEAL_PARSER] Input text:', text)
   const apiKey = process.env.OPENAI_API_KEY
   if (apiKey) {
     try {
+      console.log('[MEAL_PARSER] Attempting OpenAI API call...')
       const result = await callOpenAIParser(apiKey, text)
+      console.log('[MEAL_PARSER] OpenAI result:', result)
       return {
         mealType: (result.mealType ?? inferMealType(text)) as MealType,
         items: result.items,
@@ -45,11 +48,15 @@ export async function parseMealFromText(text: string): Promise<ParsedMealResult>
         confidence: 'high',
       }
     } catch (error) {
-      console.warn('Falling back to heuristic meal parser', error)
+      console.warn('[MEAL_PARSER] OpenAI failed, falling back to heuristic parser:', error)
     }
+  } else {
+    console.log('[MEAL_PARSER] No OpenAI API key, using heuristic parser')
   }
 
-  return heuristicMealParser(text)
+  const heuristicResult = heuristicMealParser(text)
+  console.log('[MEAL_PARSER] Heuristic result:', heuristicResult)
+  return heuristicResult
 }
 
 async function callOpenAIParser(apiKey: string, text: string) {
@@ -90,29 +97,43 @@ async function callOpenAIParser(apiKey: string, text: string) {
 }
 
 function heuristicMealParser(text: string): ParsedMealResult {
+  console.log('[HEURISTIC_PARSER] Starting with text:', text)
   let workingText = text.trim()
 
+  // Remove colon-prefixed text (like "breakfast:")
   const colonIndex = workingText.indexOf(':')
   if (colonIndex !== -1 && colonIndex < workingText.length - 1) {
     workingText = workingText.slice(colonIndex + 1)
+    console.log('[HEURISTIC_PARSER] After colon removal:', workingText)
   }
 
+  // Remove conversational prefixes
   const prefixPatterns = [
     /^\s*(?:my\s+)?(?:breakfast|lunch|dinner|snack)\s*(?:was|is|=)?\s*/i,
     /^\s*(?:i\s+(?:had|ate|was\s+eating))\s*/i,
-    /^\s*for\s+(?:breakfast|lunch|dinner|snack)\s+(?:today|yesterday)?\s*/i,
+    /^\s*for\s+(?:breakfast|lunch|dinner|snack)\s+(?:today|yesterday)?\s*,?\s*/i,
     /^\s*(?:breakfast|lunch|dinner|snack)\s*(?:today|yesterday)?\s*(?:was|is|:)?\s*/i,
   ]
 
   for (const pattern of prefixPatterns) {
     if (pattern.test(workingText)) {
       workingText = workingText.replace(pattern, '')
+      console.log('[HEURISTIC_PARSER] After prefix removal:', workingText)
       break
     }
   }
 
+  // Clean and split into items
   const cleaned = workingText.replace(/[^a-zA-Z0-9,./\s-]/g, '').toLowerCase()
-  const parts = cleaned.split(/(?:\band\b|,|\+)/).map((part) => part.trim()).filter(Boolean)
+  console.log('[HEURISTIC_PARSER] Cleaned text:', cleaned)
+
+  // Better splitting: handle "and", commas, and other separators
+  const parts = cleaned
+    .split(/(?:\s+and\s+|,\s*|\+\s*|\s*&\s*)/)
+    .map((part) => part.trim())
+    .filter(part => part.length > 0)
+
+  console.log('[HEURISTIC_PARSER] Split parts:', parts)
   const items = parts.length > 0 ? parts : ['meal']
 
   const macros = items.reduce<MacroBreakdown>((acc, item) => {
