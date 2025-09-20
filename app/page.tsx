@@ -387,9 +387,17 @@ function MealDraftCard({ draft, onConfirm, onDismiss }: MealDraftCardProps) {
       <div className="flex justify-between items-start">
         <div>
           <p className="text-sm font-semibold">Confirm this meal?</p>
-          <p className="text-sm text-muted-foreground mt-1">
-            {draft.payload.items?.join(", ") ?? draft.payload.originalText}
-          </p>
+          {Array.isArray(draft.payload.items) && draft.payload.items.length > 0 ? (
+            <ul className="mt-1 list-disc space-y-1 pl-5 text-sm text-muted-foreground">
+              {draft.payload.items.map((item, index) => (
+                <li key={`${draft.id}-item-${index}`} className="leading-snug">
+                  {item}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-sm text-muted-foreground mt-1">{draft.payload.originalText}</p>
+          )}
           <p className="text-xs text-muted-foreground mt-2">
             Confidence: {confidence.toUpperCase()}
           </p>

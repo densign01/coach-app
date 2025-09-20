@@ -90,7 +90,26 @@ async function callOpenAIParser(apiKey: string, text: string) {
 }
 
 function heuristicMealParser(text: string): ParsedMealResult {
-  const cleaned = text.replace(/[^a-zA-Z0-9,\s]/g, '').toLowerCase()
+  let workingText = text.trim()
+
+  const colonIndex = workingText.indexOf(':')
+  if (colonIndex !== -1 && colonIndex < workingText.length - 1) {
+    workingText = workingText.slice(colonIndex + 1)
+  }
+
+  const prefixPatterns = [
+    /^\s*(?:my\s+)?(?:breakfast|lunch|dinner|snack)\s*(?:was|is|=)?\s*/i,
+    /^\s*(?:i\s+(?:had|ate|was\s+eating))\s*/i,
+  ]
+
+  for (const pattern of prefixPatterns) {
+    if (pattern.test(workingText)) {
+      workingText = workingText.replace(pattern, '')
+      break
+    }
+  }
+
+  const cleaned = workingText.replace(/[^a-zA-Z0-9,./\s-]/g, '').toLowerCase()
   const parts = cleaned.split(/(?:\band\b|,|\+)/).map((part) => part.trim()).filter(Boolean)
   const items = parts.length > 0 ? parts : ['meal']
 
