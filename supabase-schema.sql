@@ -31,6 +31,18 @@ CREATE TABLE profiles (
 
 CREATE INDEX idx_profiles_username ON profiles(username);
 
+-- Chat messages
+CREATE TABLE chat_messages (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  role TEXT NOT NULL CHECK (role IN ('user', 'coach', 'system')),
+  content TEXT NOT NULL,
+  metadata JSONB,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX idx_chat_messages_user ON chat_messages(user_id, created_at DESC);
+
 -- Days table (tracks daily plans and targets)
 CREATE TABLE days (
   id TEXT PRIMARY KEY,
@@ -112,6 +124,7 @@ CREATE INDEX idx_health_samples_user_type ON health_samples(user_id, type);
 -- Enable Row Level Security
 ALTER TABLE users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE chat_messages ENABLE ROW LEVEL SECURITY;
 ALTER TABLE days ENABLE ROW LEVEL SECURITY;
 ALTER TABLE meals ENABLE ROW LEVEL SECURITY;
 ALTER TABLE meal_drafts ENABLE ROW LEVEL SECURITY;
@@ -127,7 +140,12 @@ CREATE POLICY "Users can manage their own data" ON users
   FOR ALL USING (id = auth.uid()::text);
 
 CREATE POLICY "Users manage their profile" ON profiles
-  FOR ALL USING (user_id = auth.uid()::text);
+  FOR ALL USING (user_id = auth.uid()::text)
+  WITH CHECK (user_id = auth.uid()::text);
+
+CREATE POLICY "Users manage their chat" ON chat_messages
+  FOR ALL USING (user_id = auth.uid()::text)
+  WITH CHECK (user_id = auth.uid()::text);
 
 CREATE POLICY "Users can manage their days" ON days
   FOR ALL USING (user_id = auth.uid()::text);

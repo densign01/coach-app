@@ -1,6 +1,7 @@
 'use client'
 
 import type {
+  CoachMessage,
   CoachState,
   DaySnapshot,
   MacroBreakdown,
@@ -8,6 +9,7 @@ import type {
   UserProfile,
   WorkoutLog,
 } from '@/lib/types'
+import type { Database } from '@/lib/supabase/schema'
 import { buildDayId } from '@/lib/utils'
 
 export interface ApiMealDraft {
@@ -153,10 +155,30 @@ export async function generateCoachResponse(params: {
   workoutSummary?: string
   energyNote?: string
   intent?: string
+  profile?: UserProfile | null
+  history?: CoachMessage[]
 }): Promise<CoachResponsePayload> {
   try {
     const todaysMeals = params.state.meals.filter((meal) => meal.date === params.state.activeDate)
     const todaysWorkouts = params.state.workouts.filter((workout) => workout.date === params.state.activeDate)
+    const profile = params.profile ?? params.state.profile
+    const history = params.history ?? params.state.messages
+    const historyPayload = history
+      ?.slice(-10)
+      .map((message) => ({ role: message.role, content: message.content }))
+    const profileSnapshot = profile
+      ? {
+          firstName: profile.firstName,
+          lastName: profile.lastName,
+          goals: profile.goals,
+          heightCm: profile.heightCm,
+          weightKg: profile.weightKg,
+          age: profile.age,
+          gender: profile.gender,
+          summary: profile.profileSummary,
+          insights: profile.insights ?? null,
+        }
+      : null
 
     const response = await fetch('/api/chat', {
       method: 'POST',
@@ -172,6 +194,8 @@ export async function generateCoachResponse(params: {
         upcomingPlan: describeUpcomingPlan(params.state),
         recentMeals: todaysMeals.slice(-3).map((meal) => `${meal.type}: ${meal.items.join(', ')}`),
         recentWorkouts: todaysWorkouts.slice(-3).map((workout) => `${workout.type} ${workout.minutes}min`),
+        profile: profileSnapshot,
+        history: historyPayload,
       }),
     })
 
@@ -282,5 +306,57 @@ function normalizeProfile(raw: unknown): UserProfile {
     onboardingData: (onboardingDataRaw as Record<string, unknown>) ?? null,
     onboardingCompleted: onboardingCompletedRaw !== undefined && onboardingCompletedRaw !== null ? Boolean(onboardingCompletedRaw) : null,
     updatedAt: (record.updated_at as string) ?? (record.updatedAt as string) ?? null,
+  }
+}
+
+export async function fetchChatHistory(limit = 100): Promise<CoachMessage[] | null> {
+  try {
+    const response = await fetch(`/api/messages?limit=${limit}`)
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}))
+      console.error('Failed to fetch chat history', error)
+      return null
+    }
+
+    const payload = await response.json()
+    if (!Array.isArray(payload.messages)) return []
+
+    type ChatRow = Database['public']['Tables']['chat_messages']['Row']
+
+    return (payload.messages as ChatRow[]).map((message) => ({
+      id: message.id,
+      role: message.role,
+      content: message.content,
+      createdAt: message.created_at,
+      metadata: (message.metadata as Record<string, unknown> | null) ?? undefined,
+    }))
+  } catch (error) {
+    console.error('Failed to fetch chat history', error)
+    return null
+  }
+}
+
+export async function persistChatMessage(message: CoachMessage) {
+  try {
+    const response = await fetch('/api/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        message: {
+          id: message.id,
+          role: message.role,
+          content: message.content,
+          createdAt: message.createdAt,
+          metadata: message.metadata ?? null,
+        },
+      }),
+    })
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}))
+      console.error('Failed to persist chat message', error)
+    }
+  } catch (error) {
+    console.error('Failed to persist chat message', error)
   }
 }

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 
+import { parseHeightToCm, parseWeightToKg } from '@/lib/ai/onboarding'
 import { getSupabaseRouteClient } from '@/lib/supabase/server'
 
 type ProfilePayload = Partial<{
@@ -8,6 +9,9 @@ type ProfilePayload = Partial<{
   lastName: string | null
   heightCm: number | string | null
   weightKg: number | string | null
+  heightFeet?: number | string | null
+  heightInches?: number | string | null
+  weightLbs?: number | string | null
   age: number | string | null
   gender: string | null
   goals: string | null
@@ -73,7 +77,7 @@ export async function PUT(request: Request) {
 
   if (error) {
     console.error('[api/profile] upsert error', error)
-    return NextResponse.json({ error: 'Failed to update profile' }, { status: 500 })
+    return NextResponse.json({ error: error.message ?? 'Failed to update profile' }, { status: 500 })
   }
 
   return NextResponse.json({ profile: data })
@@ -89,8 +93,22 @@ function normalizeProfilePayload(payload: ProfilePayload) {
   if ('goals' in payload) result.goals = coerceString(payload.goals)
   if ('profileSummary' in payload) result.profile_summary = coerceString(payload.profileSummary)
 
-  if ('heightCm' in payload) result.height_cm = coerceNumber(payload.heightCm)
-  if ('weightKg' in payload) result.weight_kg = coerceNumber(payload.weightKg)
+  if ('heightCm' in payload) result.height_cm = coerceHeight(payload.heightCm)
+  if ('heightFeet' in payload || 'heightInches' in payload) {
+    const feet = coerceNumber(payload.heightFeet)
+    const inches = coerceNumber(payload.heightInches)
+    if (feet !== null || inches !== null) {
+      const totalInches = (feet ?? 0) * 12 + (inches ?? 0)
+      result.height_cm = Math.round(totalInches * 2.54)
+    }
+  }
+  if ('weightKg' in payload) result.weight_kg = coerceWeight(payload.weightKg)
+  if ('weightLbs' in payload) {
+    const pounds = coerceNumber(payload.weightLbs)
+    if (pounds !== null) {
+      result.weight_kg = Math.round(pounds * 0.453592 * 10) / 10
+    }
+  }
   if ('age' in payload) result.age = payload.age === null ? null : coerceNumber(payload.age)
 
   if ('insights' in payload) result.insights_json = Array.isArray(payload.insights) ? payload.insights : []
@@ -111,4 +129,41 @@ function coerceNumber(value: unknown) {
   if (value === null || value === undefined || value === '') return null
   const num = Number(value)
   return Number.isFinite(num) ? num : null
+}
+
+function coerceHeight(value: unknown) {
+  if (value === null || value === undefined || value === '') return null
+  if (typeof value === 'number') return value
+  const str = String(value).trim()
+  if (!str) return null
+  const parsed = parseHeightToCm(str)
+  if (parsed) return parsed
+  return coerceNumber(str)
+}
+
+function coerceWeight(value: unknown) {
+  if (value === null || value === undefined || value === '') return null
+  if (typeof value === 'number') {
+    return value > 400 ? Math.round(value * 0.453592 * 10) / 10 : value
+  }
+
+  const str = String(value).trim()
+  if (!str) return null
+  const lower = str.toLowerCase()
+
+  if (lower.includes('lb') || lower.includes('pound') || lower.includes('lbs')) {
+    return parseWeightToKg(str)
+  }
+
+  const numeric = parseWeightToKg(str)
+  if (numeric) {
+    return numeric
+  }
+
+  const num = coerceNumber(str)
+  if (num && num > 400) {
+    return Math.round(num * 0.453592 * 10) / 10
+  }
+
+  return num
 }

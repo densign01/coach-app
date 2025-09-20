@@ -85,6 +85,32 @@ export interface Database {
           updated_at?: string
         }
       }
+      chat_messages: {
+        Row: {
+          id: string
+          user_id: string
+          role: 'user' | 'coach' | 'system'
+          content: string
+          metadata: Json | null
+          created_at: string
+        }
+        Insert: {
+          id: string
+          user_id: string
+          role: 'user' | 'coach' | 'system'
+          content: string
+          metadata?: Json | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          role?: 'user' | 'coach' | 'system'
+          content?: string
+          metadata?: Json | null
+          created_at?: string
+        }
+      }
       days: {
         Row: {
           id: string
