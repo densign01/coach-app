@@ -118,6 +118,7 @@ export interface CoachState {
   activeDate: string
   userId: string | null
   profile: UserProfile | null
+  profileLoaded: boolean
   messages: CoachMessage[]
   mealDrafts: MealDraft[]
   meals: MealLog[]

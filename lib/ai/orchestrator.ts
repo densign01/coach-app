@@ -25,7 +25,8 @@ interface CoachReply {
 export async function orchestrateCoachReply(message: string, state: CoachState): Promise<CoachReply> {
   // Check if user is in onboarding flow
   const profile = state.profile
-  const isInOnboarding = !profile?.onboardingCompleted && (profile?.onboardingStep ?? 0) >= 0
+  const isInOnboarding =
+    state.profileLoaded && !profile?.onboardingCompleted && (profile?.onboardingStep ?? 0) >= 0
 
   if (isInOnboarding) {
     return await handleOnboardingFlow(message, state)

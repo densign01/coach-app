@@ -19,6 +19,7 @@ const defaultState: CoachState = {
   activeDate: new Date().toISOString().slice(0, 10),
   userId: null,
   profile: null,
+  profileLoaded: false,
   messages: [
     {
       id: 'welcome',
@@ -46,7 +47,10 @@ const defaultState: CoachState = {
 function coachReducer(state: CoachState, action: CoachAction): CoachState {
   switch (action.type) {
     case 'hydrate':
-      return action.state
+      return {
+        ...action.state,
+        profileLoaded: Boolean(action.state.profile ?? false),
+      }
     case 'addMessage':
       return { ...state, messages: [...state.messages, action.message] }
     case 'replaceMessages':
@@ -82,7 +86,7 @@ function coachReducer(state: CoachState, action: CoachAction): CoachState {
     case 'syncDay':
       return syncDayReducer(state, action.payload)
     case 'setProfile':
-      return { ...state, profile: action.profile }
+      return { ...state, profile: action.profile, profileLoaded: true }
     case 'setUser':
       if (state.userId === action.userId) {
         return state
@@ -92,6 +96,7 @@ function coachReducer(state: CoachState, action: CoachAction): CoachState {
         userId: action.userId,
         activeDate: state.activeDate,
         profile: null,
+        profileLoaded: false,
       }
     default:
       return state
@@ -190,16 +195,9 @@ export function CoachProvider({ children }: CoachProviderProps) {
     fetchedProfileRef.current = state.userId
 
     void fetchUserProfile().then((profile) => {
-      console.log('normalized profile from API:', profile);
-      console.log(
-        'normalized profile flags:',
-        profile?.onboardingCompleted,
-        profile?.onboardingStep,
-        profile?.profileSummary,
-      );
-      if (cancelled) return;
+      if (cancelled) return
 
-      dispatch({ type: 'setProfile', profile });
+      dispatch({ type: 'setProfile', profile })
 
       const needsOnboarding =
         !profile?.onboardingCompleted && (profile?.onboardingStep ?? 0) === 0;
@@ -215,9 +213,9 @@ export function CoachProvider({ children }: CoachProviderProps) {
               createdAt: new Date().toISOString(),
             },
           ],
-        });
+        })
       }
-    });
+    })
 
     return () => {
       cancelled = true
