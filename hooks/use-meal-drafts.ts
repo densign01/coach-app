@@ -35,7 +35,7 @@ export function useMealDrafts() {
           fat: payloadMacros?.fat ?? emptyMacros.fat,
           carbs: payloadMacros?.carbs ?? emptyMacros.carbs,
         },
-        source: 'text',
+        source: 'api',
         createdAt: now.toISOString(),
       }
 

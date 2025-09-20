@@ -3,6 +3,22 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabase/server'
 import { buildDayId } from '@/lib/utils'
 
+function normalizeMealSource(source: string | null | undefined): 'api' | 'vision' | 'est' {
+  switch (source) {
+    case 'vision':
+      return 'vision'
+    case 'api':
+      return 'api'
+    case 'est':
+      return 'est'
+    case 'manual':
+    case 'text':
+      return 'api'
+    default:
+      return 'est'
+  }
+}
+
 export async function GET(request: NextRequest) {
   const date = request.nextUrl.searchParams.get('date')
   if (!date) {
@@ -100,7 +116,7 @@ async function fetchMeals(
       fat: Number(meal.macros_json?.fat ?? 0),
       carbs: Number(meal.macros_json?.carbs ?? 0),
     },
-    source: (meal.source ?? 'est') as 'text' | 'vision' | 'manual',
+    source: normalizeMealSource(meal.source),
     createdAt: meal.created_at ?? new Date().toISOString(),
   }))
 }

@@ -3,6 +3,22 @@ import { NextResponse } from 'next/server'
 import { getSupabaseRouteClient } from '@/lib/supabase/server'
 import { buildDayId } from '@/lib/utils'
 
+function normalizeMealSource(source: string | null | undefined): 'api' | 'vision' | 'est' {
+  switch (source) {
+    case 'vision':
+      return 'vision'
+    case 'api':
+      return 'api'
+    case 'est':
+      return 'est'
+    case 'manual':
+    case 'text':
+      return 'api'
+    default:
+      return 'est'
+  }
+}
+
 export async function POST(request: Request) {
   const body = await request.json().catch(() => null)
 
@@ -40,7 +56,7 @@ export async function POST(request: Request) {
       type: meal.type,
       items_json: meal.items,
       macros_json: meal.macros,
-      source: meal.source ?? 'text',
+      source: normalizeMealSource(meal.source),
     })
 
   if (insertError) {

@@ -11,6 +11,8 @@ export interface MacroBreakdown {
   carbs: number
 }
 
+export type MealSource = 'api' | 'vision' | 'est' | 'manual' | 'text'
+
 export interface MealLog {
   id: string
   dayId: string
@@ -18,7 +20,7 @@ export interface MealLog {
   type: MealType
   items: string[]
   macros: MacroBreakdown
-  source: 'text' | 'vision' | 'manual' | 'est'
+  source: MealSource
   createdAt: string
 }
 

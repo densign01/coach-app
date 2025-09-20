@@ -28,7 +28,7 @@ export function useFoodItemDrafts() {
         type: draft.mealType,
         items: [draft.payload.item],
         macros: draft.payload.macros,
-        source: draft.payload.source,
+        source: draft.payload.source === 'text' ? 'api' : draft.payload.source,
         createdAt: now.toISOString(),
       }
 
