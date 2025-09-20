@@ -38,15 +38,17 @@ export async function POST(request: Request) {
     payload.macroTotals
       ? `Current totals -> ${Math.round(payload.macroTotals.protein)}g protein / ${Math.round(payload.macroTotals.calories)} cal / ${Math.round(payload.macroTotals.fat)}g fat / ${Math.round(payload.macroTotals.carbs)}g carbs.`
       : '',
-    payload.upcomingPlan ? `Today plan: ${payload.upcomingPlan}` : '',
+    payload.recentWorkouts?.length
+      ? `Workouts logged today: ${payload.recentWorkouts.join(' | ')}`
+      : 'No workouts logged yet today.',
+    payload.upcomingPlan ? `Upcoming plan (optional): ${payload.upcomingPlan}` : '',
     payload.mealSummary ? `Proposed meal: ${payload.mealSummary}` : '',
     payload.workoutSummary ? `Logged workout: ${payload.workoutSummary}` : '',
     payload.energyNote ? `Energy update: ${payload.energyNote}` : '',
     payload.recentMeals?.length ? `Recent meals: ${payload.recentMeals.join(' | ')}` : '',
-    payload.recentWorkouts?.length ? `Recent workouts: ${payload.recentWorkouts.join(' | ')}` : '',
   ].filter(Boolean)
 
-const systemPrompt = `You are Coach, a compassionate, practical fitness + nutrition mentor.
+  const systemPrompt = `You are Coach, a compassionate, practical fitness + nutrition mentor.
 
 Follow the Coach Interaction Guide at all times:
 - Lead with encouragement, then actionable guidance.
@@ -56,9 +58,13 @@ Follow the Coach Interaction Guide at all times:
 - When summarizing meals or logs, invite corrections ("Did I miss anything?").
 - Never fabricate meals, workouts, or plans. If you don’t have details, say so and ask a short clarifying question or offer up to two optional ideas prefaced with “You could try…” or “One option is…”.
 - Avoid assuming access to specific foods; keep suggestions flexible and optional.
-- Never mention that you are an AI.`
+- Only mention a workout as completed if the user explicitly says they did it; otherwise treat plans as optional suggestions.
+- Never mention that you are an AI.
+Always respond using this exact format:
+Reply: <your coaching message>
+Insight: <short note about the user's preferences/habits/needs, or "none" if nothing new>`
 
-const userPrompt = `User message: "${payload.userMessage}".
+  const userPrompt = `User message: "${payload.userMessage}".
 Intent: ${payload.intent}
 Context:
 ${contextLines.join('\n') || 'No additional context.'}
@@ -88,10 +94,12 @@ Respond with 2–4 sentences. Start with encouragement or empathy, then offer a 
     }
 
     const data = await response.json()
-    const message = extractMessage(data)
+    const rawMessage = extractMessage(data)
+    const { reply, insight } = parseCoachOutput(rawMessage)
 
     return NextResponse.json({
-      message: message ?? 'I hear you. Let’s give your body some space today and regroup tomorrow — want me to check in with you later?'
+      message: reply ?? 'I hear you. Let’s give your body some space today and regroup tomorrow — want me to check in with you later?',
+      insight: insight ?? null,
     })
   } catch (error) {
     console.error('[api/chat] Unexpected error', error)
@@ -158,4 +166,30 @@ function extractMessage(data: unknown): string | null {
   }
 
   return null
+}
+
+function parseCoachOutput(raw: string | null): { reply: string | null; insight: string | null } {
+  if (!raw) return { reply: null, insight: null }
+
+  const lines = raw.split(/\n+/).map((line) => line.trim()).filter(Boolean)
+  let reply: string | null = null
+  let insight: string | null = null
+
+  for (const line of lines) {
+    const lower = line.toLowerCase()
+    if (lower.startsWith('reply:')) {
+      reply = line.slice(6).trim()
+    } else if (lower.startsWith('insight:')) {
+      const value = line.slice(8).trim()
+      if (value && value.toLowerCase() !== 'none') {
+        insight = value
+      }
+    }
+  }
+
+  if (!reply) {
+    reply = lines.join(' ')
+  }
+
+  return { reply, insight }
 }

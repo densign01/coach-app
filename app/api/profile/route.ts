@@ -11,6 +11,8 @@ type ProfilePayload = Partial<{
   age: number | string | null
   gender: string | null
   goals: string | null
+  profileSummary: string | null
+  insights: string[] | null
   onboardingStep: number | null
   onboardingData: Record<string, unknown> | null
   onboardingCompleted: boolean | null
@@ -85,11 +87,13 @@ function normalizeProfilePayload(payload: ProfilePayload) {
   if ('lastName' in payload) result.last_name = coerceString(payload.lastName)
   if ('gender' in payload) result.gender = coerceString(payload.gender)
   if ('goals' in payload) result.goals = coerceString(payload.goals)
+  if ('profileSummary' in payload) result.profile_summary = coerceString(payload.profileSummary)
 
   if ('heightCm' in payload) result.height_cm = coerceNumber(payload.heightCm)
   if ('weightKg' in payload) result.weight_kg = coerceNumber(payload.weightKg)
   if ('age' in payload) result.age = payload.age === null ? null : coerceNumber(payload.age)
 
+  if ('insights' in payload) result.insights_json = Array.isArray(payload.insights) ? payload.insights : []
   if ('onboardingStep' in payload) result.onboarding_step = coerceNumber(payload.onboardingStep)
   if ('onboardingData' in payload) result.onboarding_data = payload.onboardingData
   if ('onboardingCompleted' in payload) result.onboarding_completed = Boolean(payload.onboardingCompleted)

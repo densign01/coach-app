@@ -3,16 +3,18 @@ import type { CoachMessage, UserProfile } from '@/lib/types'
 export async function generateOnboardingResponse(
   userResponse: string,
   currentStep: OnboardingStep,
-  nextStep: OnboardingStep | null
+  nextStep: OnboardingStep | null,
+  collectedData: Record<string, unknown>,
 ): Promise<string> {
   const apiKey = process.env.OPENAI_API_KEY
 
   if (!apiKey) {
     // Fallback to simple acknowledgment if no API key
-    return `Got it! ${nextStep ? nextStep.question : "Thanks for that information."}`
+    return buildFallbackOnboardingReply(userResponse, nextStep)
   }
 
   try {
+    const historySummary = summarizeCollectedData(collectedData)
     const systemPrompt = `You are a friendly, encouraging fitness coach conducting onboarding.
 Your job is to acknowledge what the user just shared and then ask the next question.
 
@@ -20,13 +22,15 @@ Current context:
 - Just asked: "${currentStep.question}"
 - User responded: "${userResponse}"
 - Next question: ${nextStep ? `"${nextStep.question}"` : "This completes onboarding"}
+- Previous answers:
+${historySummary || 'None yet.'}
 
 Instructions:
-1. Briefly acknowledge their response (1-2 sentences max)
-2. ${nextStep ? 'Then ask the next question naturally' : 'Wrap up warmly'}
-3. Be conversational, encouraging, and personal
-4. Don't repeat their exact words back
-5. Keep it concise but warm
+1. Warmly acknowledge their response (1-2 sentences max) and, when relevant, connect it to earlier answers.
+2. ${nextStep ? 'Ask the next question in a natural, conversational way.' : 'Wrap up warmly and let them know you are ready to help.'}
+3. Be encouraging, concise, and personal—use their name when known.
+4. Do not simply repeat their exact words; paraphrase or build on them.
+5. Keep it concise but warm (no more than 3 sentences total).
 
 Examples:
 - "Great! That helps me understand your routine. Now, how tall are you?"
@@ -64,12 +68,54 @@ Examples:
     console.error('Error generating onboarding response:', error)
   }
 
-  // Fallback response
+  return buildFallbackOnboardingReply(userResponse, nextStep)
+}
+
+function buildFallbackOnboardingReply(userResponse: string, nextStep: OnboardingStep | null) {
   if (nextStep) {
-    return `Thanks for that! ${nextStep.question}`
-  } else {
-    return "Perfect! That gives me everything I need to get started."
+    return `Thanks for sharing! ${nextStep.question}`
   }
+
+  return "Perfect! That gives me everything I need to get started."
+}
+
+function summarizeCollectedData(data: Record<string, unknown>): string {
+  const entries = Object.entries(data)
+    .filter(([key, value]) => key !== 'insights' && value !== undefined && value !== null && String(value).trim().length > 0)
+    .slice(-6)
+
+  if (entries.length === 0) {
+    return ''
+  }
+
+  return entries
+    .map(([key, value]) => `- ${formatSummaryLabel(key)}: ${String(value).trim()}`)
+    .join('\n')
+}
+
+function formatSummaryLabel(key: string): string {
+  const labelMap: Record<string, string> = {
+    firstName: 'First name',
+    lastName: 'Last name',
+    age: 'Age',
+    heightCm: 'Height',
+    weightKg: 'Weight',
+    gender: 'Gender',
+    goals: 'Goal',
+    onboardingDepth: 'Detail preference',
+    healthConditions: 'Health notes',
+    currentExercise: 'Current exercise',
+    typicalEating: 'Typical eating',
+    dietaryRestrictions: 'Dietary preferences',
+    motivation: 'Motivation',
+  }
+
+  if (labelMap[key]) return labelMap[key]
+
+  return key
+    .replace(/([A-Z])/g, ' $1')
+    .replace(/_/g, ' ')
+    .replace(/^./, (c) => c.toUpperCase())
 }
 
 export async function generateProfileSummary(
@@ -92,8 +138,8 @@ Goals: ${profile.goals || 'Not specified'}
 
 Additional Information:
 ${Object.entries(onboardingData)
-  .filter(([key, value]) => value && typeof value === 'string' && value.trim())
-  .map(([key, value]) => `${key}: ${value}`)
+  .filter(([, value]) => value && typeof value === 'string' && value.trim())
+  .map(([key, value]) => `${formatSummaryLabel(key)}: ${value}`)
   .join('\n')}
 `
 
@@ -144,8 +190,14 @@ Keep it conversational, specific to their details, and under 200 words.`
 function generateFallbackSummary(profile: UserProfile, onboardingData: Record<string, unknown>): string {
   const age = profile.age ? `${profile.age}-year-old` : ''
   const goals = profile.goals || 'health and fitness goals'
+  const highlights = Object.entries(onboardingData)
+    .filter(([, value]) => value && String(value).trim().length > 0)
+    .map(([key, value]) => `${formatSummaryLabel(key)}: ${String(value).trim()}`)
+    .slice(0, 4)
+    .join('\n')
 
-  return `Welcome to your personalized coaching journey! Based on what you've shared, I understand you're focused on ${goals}.
+  return `Welcome to your personalized coaching journey${age ? `, ${age}` : ''}! Based on what you've shared, I understand you're focused on ${goals}.
+${highlights ? `\n\nA few quick notes I captured:\n${highlights}` : ''}
 
 I'll be here to support you with tailored nutrition guidance and workout recommendations that fit your lifestyle. We'll take things step by step, building sustainable habits that work for you.
 
@@ -165,18 +217,31 @@ export interface OnboardingStep {
 }
 
 export const ONBOARDING_STEPS: OnboardingStep[] = [
-  // 1. Welcome & Context
   {
     id: 1,
     section: 'welcome',
-    question: "Welcome! I'll ask a few quick questions to get to know you and tailor your plan.",
+    question: "Welcome! I’ll ask a few quick questions so I can tailor everything for you.",
     type: 'text',
     required: false,
   },
-
-  // 2. Basics
   {
     id: 2,
+    section: 'basics',
+    question: "What first name should I use when I cheer you on?",
+    field: 'firstName',
+    type: 'text',
+    required: true,
+  },
+  {
+    id: 3,
+    section: 'basics',
+    question: 'Great! And your last name?',
+    field: 'lastName',
+    type: 'text',
+    required: false,
+  },
+  {
+    id: 4,
     section: 'basics',
     question: 'How old are you?',
     field: 'age',
@@ -184,203 +249,98 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
     required: true,
   },
   {
-    id: 3,
-    section: 'basics',
-    question: "What's your sex (male, female, other)?",
-    field: 'gender',
-    type: 'select',
-    options: ['male', 'female', 'other'],
-    required: true,
-  },
-  {
-    id: 4,
-    section: 'basics',
-    question: 'How tall are you? (in cm or feet/inches)',
-    field: 'heightCm',
-    type: 'text',
-    required: true,
-  },
-  {
     id: 5,
     section: 'basics',
-    question: 'What do you currently weigh? (in kg or lbs)',
-    field: 'weightKg',
+    question: 'How tall are you? (cm or feet/inches both work)',
+    field: 'heightCm',
     type: 'text',
     required: true,
   },
   {
     id: 6,
     section: 'basics',
-    question: 'How many steps do you usually get on a typical workday?',
-    customField: 'dailySteps',
+    question: 'What do you currently weigh? (kg or lbs)',
+    field: 'weightKg',
     type: 'text',
-    required: false,
+    required: true,
   },
   {
     id: 7,
     section: 'basics',
-    question: 'Do you wear a watch/track steps?',
-    customField: 'tracksSteps',
+    question: 'How do you describe your gender?',
+    field: 'gender',
     type: 'select',
-    options: ['yes', 'no'],
+    options: ['female', 'male', 'non-binary', 'prefer not to say', 'other'],
     required: false,
   },
-
-  // 3. Health & Constraints
   {
     id: 8,
-    section: 'health',
-    question: 'Do you have any injuries or conditions (e.g., back pain, GERD) I should keep in mind?',
-    customField: 'healthConditions',
-    type: 'multi-line',
-    required: false,
+    section: 'goals',
+    question: 'What’s the main goal you want us to focus on first?',
+    field: 'goals',
+    type: 'select',
+    options: ['weight loss', 'muscle gain', 'eating healthier', 'overall health', 'performance', 'not sure yet'],
+    required: true,
   },
   {
     id: 9,
-    section: 'health',
-    question: 'How many hours of sleep do you typically get?',
-    customField: 'sleepHours',
-    type: 'number',
-    required: false,
+    section: 'flow',
+    question: 'Want to dive into a few more questions now, or should I learn as we go?',
+    customField: 'onboardingDepth',
+    type: 'select',
+    options: ['Let’s answer a few more now', 'Learn as we go'],
+    required: true,
   },
   {
     id: 10,
     section: 'health',
-    question: 'Do you take any medications or supplements relevant to fitness/nutrition?',
-    customField: 'medications',
+    question: 'Any injuries or health considerations I should keep in mind?',
+    customField: 'healthConditions',
     type: 'multi-line',
     required: false,
+    skipCondition: (data) => data.onboardingDepth === 'learn',
   },
-
-  // 4. Goals
   {
     id: 11,
-    section: 'goals',
-    question: "What's your target weight range, if you have one?",
-    customField: 'targetWeight',
-    type: 'text',
-    required: false,
-  },
-  {
-    id: 12,
-    section: 'goals',
-    question: 'How quickly do you want to get there?',
-    customField: 'timeframe',
-    type: 'text',
-    required: false,
-  },
-  {
-    id: 13,
-    section: 'goals',
-    question: 'Do you want to focus more on cardio, strength, or overall health?',
-    customField: 'fitnessGoals',
-    type: 'select',
-    options: ['cardio', 'strength', 'overall health', 'mix of all'],
-    required: false,
-  },
-  {
-    id: 14,
-    section: 'goals',
-    question: 'Are there any sports/events you\'re training for?',
-    customField: 'sportsEvents',
-    type: 'text',
-    required: false,
-  },
-  {
-    id: 15,
-    section: 'goals',
-    question: 'Are you mainly interested in weight loss, muscle gain, eating healthier, or something else?',
-    field: 'goals',
-    type: 'select',
-    options: ['weight loss', 'muscle gain', 'eating healthier', 'general health', 'athletic performance'],
-    required: false,
-  },
-
-  // 5. Current Habits
-  {
-    id: 16,
     section: 'habits',
-    question: 'Walk me through a typical day of eating (breakfast, lunch, dinner, snacks).',
-    customField: 'typicalEating',
-    type: 'multi-line',
-    required: false,
-  },
-  {
-    id: 17,
-    section: 'habits',
-    question: 'How many days a week do you currently exercise, and what type of workouts do you usually do?',
+    question: 'How many days a week do you currently exercise, and what do you usually do?',
     customField: 'currentExercise',
     type: 'multi-line',
     required: false,
+    skipCondition: (data) => data.onboardingDepth === 'learn',
   },
   {
-    id: 18,
+    id: 12,
     section: 'habits',
-    question: 'Do you drink alcohol? If so, how often?',
-    customField: 'alcoholConsumption',
-    type: 'text',
+    question: 'Walk me through a typical day of eating (meals and snacks).',
+    customField: 'typicalEating',
+    type: 'multi-line',
     required: false,
+    skipCondition: (data) => data.onboardingDepth === 'learn',
   },
   {
-    id: 19,
-    section: 'habits',
-    question: 'Do you usually have dessert or sweets?',
-    customField: 'sweetConsumption',
-    type: 'text',
-    required: false,
-  },
-
-  // 6. Preferences
-  {
-    id: 20,
+    id: 13,
     section: 'preferences',
-    question: 'Any dietary restrictions (vegetarian, kosher, allergies)?',
+    question: 'Any dietary preferences or foods you avoid?',
     customField: 'dietaryRestrictions',
-    type: 'text',
+    type: 'multi-line',
     required: false,
+    skipCondition: (data) => data.onboardingDepth === 'learn',
   },
   {
-    id: 21,
-    section: 'preferences',
-    question: 'Any foods you really dislike or don\'t want in your plan?',
-    customField: 'foodDislikes',
-    type: 'text',
-    required: false,
-  },
-  {
-    id: 22,
-    section: 'preferences',
-    question: 'Do you prefer gym workouts, home workouts, classes, outdoor activities, or a mix?',
-    customField: 'workoutPreferences',
-    type: 'select',
-    options: ['gym workouts', 'home workouts', 'classes', 'outdoor activities', 'mix of all'],
-    required: false,
-  },
-
-  // 7. Motivation & Support
-  {
-    id: 23,
+    id: 14,
     section: 'motivation',
-    question: 'What\'s motivating you to work with me right now?',
+    question: 'What’s motivating you right now? Any specific wins you’re chasing?',
     customField: 'motivation',
     type: 'multi-line',
     required: false,
+    skipCondition: (data) => data.onboardingDepth === 'learn',
   },
   {
-    id: 24,
-    section: 'motivation',
-    question: 'Do you have a support system (family, friends, trainer) or should I assume it\'s just you and me?',
-    customField: 'supportSystem',
-    type: 'text',
-    required: false,
-  },
-
-  // 8. Wrap-Up
-  {
-    id: 25,
+    id: 15,
     section: 'wrap-up',
-    question: "Thanks! I'll use this info to set your initial nutrition targets and workout plan. You can always update me if things change.",
-    type: 'text',
+    question: 'Awesome! Anything else you’d like me to know before we get rolling?',
+    type: 'multi-line',
     required: false,
   },
 ]
@@ -421,6 +381,11 @@ export function parseOnboardingResponse(step: OnboardingStep, response: string, 
     }
   } else if (step.customField) {
     // Handle custom onboarding data fields
+    if (step.customField === 'onboardingDepth') {
+      const normalized = response.toLowerCase()
+      newData[step.customField] = normalized.includes('learn') ? 'learn' : 'more'
+      return newData
+    }
     if (step.type === 'number') {
       const num = parseNumber(response)
       if (num !== null) {

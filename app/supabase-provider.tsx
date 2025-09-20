@@ -6,7 +6,6 @@ import { SessionContextProvider } from '@supabase/auth-helpers-react'
 import type { Session } from '@supabase/supabase-js'
 
 import { getSupabaseBrowserClient } from '@/lib/supabase/client'
-import type { Database } from '@/lib/supabase/schema'
 
 interface SupabaseProviderProps {
   children: ReactNode

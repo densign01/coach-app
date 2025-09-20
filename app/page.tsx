@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState, useRef } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import type { ComponentType } from "react"
 import { useRouter } from "next/navigation"
 import { useSessionContext } from "@supabase/auth-helpers-react"
@@ -9,7 +9,6 @@ import { Apple, Dumbbell, Loader2, MessageCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
-import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
 import { ProfileMenu } from "@/components/profile-menu"
 
@@ -24,7 +23,6 @@ export default function CoachApp() {
   const { session, isLoading: isSessionLoading } = useSessionContext()
   const [activeTab, setActiveTab] = useState<Tab>("home")
   const [inputValue, setInputValue] = useState("")
-  const scrollAreaRef = useRef<HTMLDivElement>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   const { messages, sendMessage, isProcessing, error } = useCoachChat()

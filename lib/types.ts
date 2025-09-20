@@ -56,6 +56,8 @@ export interface UserProfile {
   age?: number | null
   gender?: string | null
   goals?: string | null
+  profileSummary?: string | null
+  insights?: string[] | null
   onboardingStep?: number | null
   onboardingData?: Record<string, unknown> | null
   onboardingCompleted?: boolean | null

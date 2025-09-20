@@ -40,6 +40,8 @@ export interface Database {
           age: number | null
           gender: string | null
           goals: string | null
+          profile_summary: string | null
+          insights_json: Json | null
           onboarding_step: number | null
           onboarding_data: Json | null
           onboarding_completed: boolean | null
@@ -56,6 +58,8 @@ export interface Database {
           age?: number | null
           gender?: string | null
           goals?: string | null
+          profile_summary?: string | null
+          insights_json?: Json | null
           onboarding_step?: number | null
           onboarding_data?: Json | null
           onboarding_completed?: boolean | null
@@ -72,6 +76,8 @@ export interface Database {
           age?: number | null
           gender?: string | null
           goals?: string | null
+          profile_summary?: string | null
+          insights_json?: Json | null
           onboarding_step?: number | null
           onboarding_data?: Json | null
           onboarding_completed?: boolean | null

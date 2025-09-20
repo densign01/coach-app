@@ -5,13 +5,11 @@ import { parseWorkoutFromText } from '@/lib/ai/workouts'
 import {
   getNextOnboardingStep,
   getOnboardingStep,
-  isOnboardingComplete,
   parseOnboardingResponse,
-  createOnboardingMessage,
   parseHeightToCm,
   parseWeightToKg,
   generateOnboardingResponse,
-  generateProfileSummary
+  generateProfileSummary,
 } from '@/lib/ai/onboarding'
 import { calculateDailyTotals, getDaySummary, getUpcomingPlan, getWeeklyWorkoutStats } from '@/lib/data/queries'
 import type { CoachState, MealDraft, MacroBreakdown, MealType, WorkoutLog, UserProfile } from '@/lib/types'
@@ -53,11 +51,14 @@ export async function orchestrateCoachReply(message: string, state: CoachState):
         coachMessage: summarizeProgress(state),
       }
     case 'statusUpdate':
-      return await buildGenerativeReply(state, message, { energyNote: describeMood(intent.payload.mood, message) })
+      return await buildGenerativeReply(state, message, {
+        energyNote: describeMood(intent.payload.mood, message),
+        intent: 'status_update',
+      })
     case 'smallTalk':
     case 'unknown':
     default:
-      return await buildGenerativeReply(state, message, {})
+      return await buildGenerativeReply(state, message, { intent: 'general' })
   }
 }
 
@@ -90,20 +91,33 @@ async function handleMealLogging(text: string, state: CoachState): Promise<Coach
 
   const mealSummary = `${parsed.items.join(', ')} (~${Math.round(parsed.macros.protein)}g protein / ${Math.round(parsed.macros.calories)} cal)`
 
-  const coachMessage =
-    (await generateCoachResponse({
-      userMessage: text,
-      state,
-      mealDraftSummary: mealSummary,
-      intent: 'meal_log',
-    })) ??
-    (parsed.confidence === 'low'
+  const aiResponse = await generateCoachResponse({
+    userMessage: text,
+    state,
+    mealDraftSummary: mealSummary,
+    intent: 'meal_log',
+  })
+
+  let coachMessage = aiResponse.message
+
+  if (!coachMessage) {
+    coachMessage = parsed.confidence === 'low'
       ? "I can take a guess at that meal, but double-check the details before we log it."
-      : `Nice. That adds about ${parsed.macros.protein.toFixed(0)}g protein and ${parsed.macros.calories.toFixed(0)} calories. Projected today → ${projectedTotals.protein.toFixed(0)}g protein / ${projectedTotals.calories.toFixed(0)} cal. Does that look right?`)
+      : `Nice. That adds about ${parsed.macros.protein.toFixed(0)}g protein and ${parsed.macros.calories.toFixed(0)} calories. Projected today → ${projectedTotals.protein.toFixed(0)}g protein / ${projectedTotals.calories.toFixed(0)} cal. Does that look right?`
+  }
+
+  let profileUpdate: UserProfile | undefined
+  if (aiResponse.insight) {
+    const updated = await appendInsightToProfile(state.profile, aiResponse.insight)
+    if (updated) {
+      profileUpdate = updated
+    }
+  }
 
   return {
     coachMessage,
     mealDraft: draft,
+    profileUpdate,
   }
 }
 
@@ -132,18 +146,27 @@ async function handleWorkoutLogging(text: string, state: CoachState): Promise<Co
 
   const workoutSummary = `${workout.type} for ${workout.minutes} minutes${parsed.distance ? ` (~${parsed.distance} distance)` : ''}`
 
-  const coachMessage =
-    (await generateCoachResponse({
-      userMessage: text,
-      state,
-      workoutSummary,
-      intent: 'workout_log',
-    })) ??
-    defaultWorkoutMessage(workout, state)
+  const aiResponse = await generateCoachResponse({
+    userMessage: text,
+    state,
+    workoutSummary,
+    intent: 'workout_log',
+  })
+
+  const coachMessage = aiResponse.message ?? defaultWorkoutMessage(workout, state)
+
+  let profileUpdate: UserProfile | undefined
+  if (aiResponse.insight) {
+    const updated = await appendInsightToProfile(state.profile, aiResponse.insight)
+    if (updated) {
+      profileUpdate = updated
+    }
+  }
 
   return {
     coachMessage,
     workoutLog: workout,
+    profileUpdate,
   }
 }
 
@@ -199,26 +222,34 @@ function addMacros(base: MacroBreakdown, delta: MacroBreakdown): MacroBreakdown 
 async function buildGenerativeReply(
   state: CoachState,
   userMessage: string,
-  { energyNote }: { energyNote?: string },
+  { energyNote, intent }: { energyNote?: string; intent?: string },
 ): Promise<CoachReply> {
-  const generated = await generateCoachResponse({
+  const aiResponse = await generateCoachResponse({
     userMessage,
     state,
     energyNote,
-    intent: 'status_update',
+    intent,
   })
 
-  if (generated) {
-    return { coachMessage: generated }
-  }
+  let coachMessage = aiResponse.message
 
-  if (energyNote && energyNote.toLowerCase().includes('unwell')) {
-    return {
-      coachMessage: "Thanks for telling me. Let's listen to your body—take the day to recover with light movement or extra rest, and we'll reassess tomorrow."
+  if (!coachMessage) {
+    if (energyNote && energyNote.toLowerCase().includes('unwell')) {
+      coachMessage = "Thanks for telling me. Let's listen to your body—take the day to recover with light movement or extra rest, and we'll reassess tomorrow."
+    } else {
+      coachMessage = fallbackGeneral(state)
     }
   }
 
-  return { coachMessage: fallbackGeneral(state) }
+  let profileUpdate: UserProfile | undefined
+  if (aiResponse.insight) {
+    const updated = await appendInsightToProfile(state.profile, aiResponse.insight)
+    if (updated) {
+      profileUpdate = updated
+    }
+  }
+
+  return { coachMessage, profileUpdate }
 }
 
 function fallbackGeneral(state: CoachState) {
@@ -258,6 +289,28 @@ function describeMood(mood: 'tired' | 'sore' | 'energized' | 'neutral', message:
   }
 }
 
+async function appendInsightToProfile(profile: UserProfile | null, insight: string | null): Promise<UserProfile | null> {
+  if (!profile?.userId) return null
+  if (!insight || insight.trim().length === 0) return null
+
+  const trimmed = insight.trim()
+  const existingInsights = Array.isArray(profile.insights) ? profile.insights : []
+  if (existingInsights[0] === trimmed) return profile
+  const normalizedInsights = [trimmed, ...existingInsights.filter((item) => item !== trimmed)].slice(0, 20)
+
+  const updatedProfile: UserProfile = {
+    ...profile,
+    insights: normalizedInsights,
+    onboardingData: {
+      ...(profile.onboardingData ?? {}),
+      insights: normalizedInsights,
+    },
+  }
+
+  const saved = await upsertUserProfile(updatedProfile)
+  return saved ?? updatedProfile
+}
+
 async function handleOnboardingFlow(message: string, state: CoachState): Promise<CoachReply> {
   const profile = state.profile
   const currentStep = profile?.onboardingStep ?? 0
@@ -271,19 +324,17 @@ async function handleOnboardingFlow(message: string, state: CoachState): Promise
     }
 
     const updatedProfile: UserProfile = {
+      ...(profile ?? {}),
       userId: state.userId!,
-      ...profile,
       onboardingStep: 1,
       onboardingData,
       onboardingCompleted: false,
     }
 
     // Save the updated profile
-    await upsertUserProfile(updatedProfile)
-
     return {
       coachMessage: firstStep.question,
-      profileUpdate: updatedProfile,
+      profileUpdate: (await upsertUserProfile(updatedProfile)) ?? updatedProfile,
     }
   }
 
@@ -294,7 +345,7 @@ async function handleOnboardingFlow(message: string, state: CoachState): Promise
   }
 
   let updatedData = { ...onboardingData }
-  let updatedProfile: UserProfile = { ...profile, userId: state.userId! }
+  const updatedProfile: UserProfile = { ...(profile ?? {}), userId: state.userId! }
 
   // Parse the response based on the current step
   if (currentStep > 1) { // Skip parsing for the welcome message
@@ -316,9 +367,10 @@ async function handleOnboardingFlow(message: string, state: CoachState): Promise
 
     // Update profile fields directly
     if (currentStepData.field && currentStepData.field !== 'custom') {
+      const fieldKey = currentStepData.field as keyof UserProfile
       const fieldValue = parsedData[currentStepData.field as string]
       if (fieldValue !== undefined) {
-        (updatedProfile as any)[currentStepData.field] = fieldValue
+        ;(updatedProfile as Record<string, unknown>)[fieldKey as string] = fieldValue
       }
     }
   }
@@ -331,15 +383,15 @@ async function handleOnboardingFlow(message: string, state: CoachState): Promise
     updatedProfile.onboardingCompleted = true
     updatedProfile.onboardingStep = currentStep + 1
     updatedProfile.onboardingData = updatedData
-
-    await upsertUserProfile(updatedProfile)
-
-    // Generate AI profile summary
     const profileSummary = await generateProfileSummary(updatedProfile, updatedData)
+    updatedProfile.profileSummary = profileSummary
+
+    const savedProfile = await upsertUserProfile(updatedProfile)
+    const finalProfile = savedProfile ?? updatedProfile
 
     return {
       coachMessage: `${profileSummary}\n\nNow, tell me about your energy, meals, or movement today and I'll help you chart the next step.`,
-      profileUpdate: updatedProfile,
+      profileUpdate: finalProfile,
     }
   }
 
@@ -347,13 +399,13 @@ async function handleOnboardingFlow(message: string, state: CoachState): Promise
   updatedProfile.onboardingStep = nextStep.id
   updatedProfile.onboardingData = updatedData
 
-  await upsertUserProfile(updatedProfile)
+  const savedProfile = await upsertUserProfile(updatedProfile)
 
   // Generate conversational response that acknowledges current answer and asks next question
-  const conversationalMessage = await generateOnboardingResponse(message, currentStepData, nextStep)
+  const conversationalMessage = await generateOnboardingResponse(message, currentStepData, nextStep, updatedData)
 
   return {
     coachMessage: conversationalMessage,
-    profileUpdate: updatedProfile,
+    profileUpdate: savedProfile ?? updatedProfile,
   }
 }

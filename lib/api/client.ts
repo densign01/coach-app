@@ -1,6 +1,13 @@
 'use client'
 
-import type { CoachState, DaySnapshot, MacroBreakdown, MealLog, UserProfile, WorkoutLog } from '@/lib/types'
+import type {
+  CoachState,
+  DaySnapshot,
+  MacroBreakdown,
+  MealLog,
+  UserProfile,
+  WorkoutLog,
+} from '@/lib/types'
 import { buildDayId } from '@/lib/utils'
 
 export interface ApiMealDraft {
@@ -134,6 +141,11 @@ function normalizeMacros(value: MacroBreakdown | undefined): MacroBreakdown {
   }
 }
 
+export interface CoachResponsePayload {
+  message: string | null
+  insight?: string | null
+}
+
 export async function generateCoachResponse(params: {
   userMessage: string
   state: CoachState
@@ -141,7 +153,7 @@ export async function generateCoachResponse(params: {
   workoutSummary?: string
   energyNote?: string
   intent?: string
-}): Promise<string | null> {
+}): Promise<CoachResponsePayload> {
   try {
     const todaysMeals = params.state.meals.filter((meal) => meal.date === params.state.activeDate)
     const todaysWorkouts = params.state.workouts.filter((workout) => workout.date === params.state.activeDate)
@@ -165,14 +177,21 @@ export async function generateCoachResponse(params: {
 
     if (!response.ok) {
       console.error('Failed to call /api/chat', await response.text())
-      return null
+      return { message: null }
     }
 
     const data = await response.json()
-    return typeof data.message === 'string' ? data.message : null
+    const message = typeof data.message === 'string' ? data.message : null
+    const insightRaw = typeof data.insight === 'string' ? data.insight.trim() : ''
+    const insight = insightRaw && insightRaw.toLowerCase() !== 'none' ? insightRaw : null
+
+    return {
+      message,
+      insight,
+    }
   } catch (error) {
     console.error('Failed to generate coach response', error)
-    return null
+    return { message: null }
   }
 }
 
@@ -242,6 +261,7 @@ function normalizeProfile(raw: unknown): UserProfile {
   const onboardingStepRaw = record.onboarding_step ?? record.onboardingStep
   const onboardingDataRaw = record.onboarding_data ?? record.onboardingData
   const onboardingCompletedRaw = record.onboarding_completed ?? record.onboardingCompleted
+  const insightsRaw = record.insights_json ?? record.insightsJson
 
   return {
     userId: String(record.user_id ?? record.userId ?? ''),
@@ -253,6 +273,11 @@ function normalizeProfile(raw: unknown): UserProfile {
     age: record.age !== undefined && record.age !== null ? Number(record.age) : null,
     gender: (record.gender as string) ?? null,
     goals: (record.goals as string) ?? null,
+    profileSummary: (record.profile_summary as string) ?? (record.profileSummary as string) ?? null,
+    insights:
+      Array.isArray(insightsRaw)
+        ? (insightsRaw as unknown[]).map((item) => String(item)).filter((item) => item.trim().length > 0)
+        : null,
     onboardingStep: onboardingStepRaw !== undefined && onboardingStepRaw !== null ? Number(onboardingStepRaw) : null,
     onboardingData: (onboardingDataRaw as Record<string, unknown>) ?? null,
     onboardingCompleted: onboardingCompletedRaw !== undefined && onboardingCompletedRaw !== null ? Boolean(onboardingCompletedRaw) : null,
