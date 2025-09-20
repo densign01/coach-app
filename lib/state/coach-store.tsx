@@ -190,7 +190,11 @@ export function CoachProvider({ children }: CoachProviderProps) {
     fetchedProfileRef.current = state.userId
 
     void fetchUserProfile().then((profile) => {
-      console.log('normalized profile from API:', profile);
+      console.log(
+        'normalized profile from API:',
+        profile?.onboardingCompleted,
+        profile?.onboardingStep,
+        profile?.profileSummary);
       if (cancelled) return;
       dispatch({ type: 'setProfile', profile });
 
