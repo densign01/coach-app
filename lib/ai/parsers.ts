@@ -60,11 +60,11 @@ async function callOpenAIParser(apiKey: string, text: string) {
       Authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
-      model: 'gpt-5-mini',
+      model: 'gpt-4o-mini',
       messages: [
         {
           role: 'system',
-          content: 'Extract meal items and macro estimates from user text. Respond only with valid JSON matching this schema: {"mealType":"breakfast|lunch|dinner|snack","items":["string"],"macros":{"calories":number,"protein":number,"fat":number,"carbs":number}}. Use realistic estimates.'
+          content: 'Extract only the actual food items and their macro estimates from user text. Ignore conversational phrases, ignore text like "for breakfast today" or "I had". Focus only on the foods eaten. Items should be specific foods like "2 eggs", "1 cup oatmeal", not conversation text. Respond only with valid JSON matching this schema: {"mealType":"breakfast|lunch|dinner|snack","items":["string"],"macros":{"calories":number,"protein":number,"fat":number,"carbs":number}}. Use realistic macro estimates.'
         },
         {
           role: 'user',
@@ -100,6 +100,8 @@ function heuristicMealParser(text: string): ParsedMealResult {
   const prefixPatterns = [
     /^\s*(?:my\s+)?(?:breakfast|lunch|dinner|snack)\s*(?:was|is|=)?\s*/i,
     /^\s*(?:i\s+(?:had|ate|was\s+eating))\s*/i,
+    /^\s*for\s+(?:breakfast|lunch|dinner|snack)\s+(?:today|yesterday)?\s*/i,
+    /^\s*(?:breakfast|lunch|dinner|snack)\s*(?:today|yesterday)?\s*(?:was|is|:)?\s*/i,
   ]
 
   for (const pattern of prefixPatterns) {
