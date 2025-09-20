@@ -8,7 +8,12 @@ export type CoachIntent =
   | { type: 'smallTalk' }
   | { type: 'unknown' }
 
-const mealKeywords = ['ate', 'eating', 'breakfast', 'lunch', 'dinner', 'snack']
+const mealKeywords = [
+  'ate', 'eating', 'breakfast', 'lunch', 'dinner', 'snack',
+  'had', 'slice', 'pizza', 'apple', 'cheese', 'bread', 'egg', 'eggs',
+  'cottage', 'muffin', 'meal', 'food', 'drink', 'coffee', 'smoothie',
+  'salad', 'sandwich', 'burger', 'chicken', 'beef', 'pasta', 'rice'
+]
 const workoutKeywords = [
   'ran',
   'run',
