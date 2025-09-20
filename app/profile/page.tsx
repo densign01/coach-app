@@ -78,7 +78,7 @@ export default function ProfilePage() {
   }
 
   const handleGenderChange = (value: string) => {
-    setFormState((prev) => ({ ...prev, gender: value }))
+    setFormState((prev) => ({ ...prev, gender: value === "not-specified" ? "" : value }))
   }
 
   const handleSubmit = async () => {
@@ -159,12 +159,12 @@ export default function ProfilePage() {
               <Input value={formState.weightKg} onChange={handleChange("weightKg")} inputMode="decimal" placeholder="68" />
             </Field>
             <Field label="Gender">
-              <Select value={formState.gender} onValueChange={handleGenderChange}>
+              <Select value={formState.gender || undefined} onValueChange={handleGenderChange}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Not specified</SelectItem>
+                  <SelectItem value="not-specified">Not specified</SelectItem>
                   {genderOptions.map((option) => (
                     <SelectItem key={option.value} value={option.value}>
                       {option.label}
