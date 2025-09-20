@@ -190,12 +190,15 @@ export function CoachProvider({ children }: CoachProviderProps) {
     fetchedProfileRef.current = state.userId
 
     void fetchUserProfile().then((profile) => {
+      console.log('normalized profile from API:', profile);
       console.log(
-        'normalized profile from API:',
+        'normalized profile flags:',
         profile?.onboardingCompleted,
         profile?.onboardingStep,
-        profile?.profileSummary);
+        profile?.profileSummary,
+      );
       if (cancelled) return;
+
       dispatch({ type: 'setProfile', profile });
 
       const needsOnboarding =
@@ -215,6 +218,7 @@ export function CoachProvider({ children }: CoachProviderProps) {
         });
       }
     });
+
 
 
     return () => {
