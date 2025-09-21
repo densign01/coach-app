@@ -229,16 +229,48 @@ function heuristicMealParser(text: string): MealParseResult {
 }
 
 function segmentMealText(text: string): string[] {
-  const withoutPrefixes = text
-    .replace(/^[^:]+:\s*/, '')
-    .replace(/^(?:my\s+)?(?:breakfast|lunch|dinner|snack)\s*(?:was|is|=)?\s*/i, '')
-    .replace(/^(?:i\s+(?:had|ate|was\s+eating))\s*/i, '')
-    .trim()
+  console.log('[MEAL_PARSER] segmentMealText input:', text)
 
-  return withoutPrefixes
+  let withoutPrefixes = text
+
+  // Remove colon-separated prefixes (e.g., "Meal: ...")
+  const step1 = withoutPrefixes.replace(/^[^:]+:\s*/, '')
+  if (step1 !== withoutPrefixes) {
+    console.log('[MEAL_PARSER] After colon removal:', step1)
+    withoutPrefixes = step1
+  }
+
+  // Remove conversational meal type prefixes (e.g., "For lunch", "At breakfast", "During dinner")
+  const step2 = withoutPrefixes.replace(/^(?:for\s+|at\s+|during\s+|my\s+)?(?:breakfast|lunch|dinner|snack)\s*(?:was|is|=|,)?\s*/i, '')
+  if (step2 !== withoutPrefixes) {
+    console.log('[MEAL_PARSER] After meal type removal:', step2)
+    withoutPrefixes = step2
+  }
+
+  // Remove "I had/ate/was eating" constructions
+  const step3 = withoutPrefixes.replace(/^(?:i\s+(?:had|ate|was\s+eating|just\s+had))\s*/i, '')
+  if (step3 !== withoutPrefixes) {
+    console.log('[MEAL_PARSER] After "I had" removal:', step3)
+    withoutPrefixes = step3
+  }
+
+  // Remove additional conversational starters
+  const step4 = withoutPrefixes.replace(/^(?:today\s+)?(?:i\s+)?(?:just\s+|also\s+)?(?:consumed|enjoyed|grabbed)\s*/i, '')
+  if (step4 !== withoutPrefixes) {
+    console.log('[MEAL_PARSER] After conversational starters removal:', step4)
+    withoutPrefixes = step4
+  }
+
+  withoutPrefixes = withoutPrefixes.trim()
+  console.log('[MEAL_PARSER] Final cleaned text:', withoutPrefixes)
+
+  const parts = withoutPrefixes
     .split(/(?:\s+and\s+|,\s*|\+\s*|\s*&\s*)/)
     .map((part) => part.trim())
     .filter(Boolean)
+
+  console.log('[MEAL_PARSER] Final segmented parts:', parts)
+  return parts
 }
 
 function normalizeQuantity(quantity?: z.infer<typeof quantitySchema>): MealItemQuantity {
