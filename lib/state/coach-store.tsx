@@ -3,7 +3,15 @@
 import { createContext, useContext, useEffect, useMemo, useReducer, useRef } from 'react'
 
 import { fetchDaySnapshot, fetchUserProfile, fetchChatHistory } from '@/lib/api/client'
-import type { CoachAction, CoachContextValue, CoachState, DaySnapshot, MacroBreakdown, MealLog } from '@/lib/types'
+import type {
+  CoachAction,
+  CoachContextValue,
+  CoachState,
+  DaySnapshot,
+  MacroBreakdown,
+  MealLog,
+  StructuredMealItem,
+} from '@/lib/types'
 import { buildDayId } from '@/lib/utils'
 import type { ReactNode } from 'react'
 
@@ -77,14 +85,16 @@ function coachReducer(state: CoachState, action: CoachAction): CoachState {
       const draft = state.foodItemDrafts.find((d) => d.id === action.draftId)
       if (!draft || !state.userId) return state
 
+      const item = draft.payload.item
+      const label = formatStructuredItemLabel(item)
       const meal: MealLog = {
         id: crypto.randomUUID(),
         dayId: buildDayId(state.userId, state.activeDate),
         date: state.activeDate,
         type: draft.mealType,
-        items: [draft.payload.item],
-        macros: draft.payload.macros,
-        source: draft.payload.source === 'text' ? 'api' : draft.payload.source,
+        items: [label],
+        macros: nutritionEstimateToMacroBreakdown(item.nutritionEstimate),
+        source: draft.payload.source === 'heuristic' ? 'est' : 'api',
         createdAt: new Date().toISOString(),
       }
 
@@ -303,5 +313,27 @@ function syncDayReducer(state: CoachState, snapshot: DaySnapshot): CoachState {
     meals: sortedMeals,
     workouts: sortedWorkouts,
     targets: snapshot.targets ?? state.targets,
+  }
+}
+
+function formatStructuredItemLabel(item: StructuredMealItem): string {
+  const quantity = item.quantity.display ?? buildQuantityDisplay(item.quantity)
+  return `${quantity ? `${quantity} ` : ''}${item.name || item.rawText}`.trim()
+}
+
+function buildQuantityDisplay(quantity: StructuredMealItem['quantity']): string | null {
+  if (quantity.value == null) return null
+  if (!quantity.unit || quantity.unit === 'other') {
+    return String(quantity.value)
+  }
+  return `${quantity.value} ${quantity.unit}`
+}
+
+function nutritionEstimateToMacroBreakdown(estimate: StructuredMealItem['nutritionEstimate']): MacroBreakdown {
+  return {
+    calories: Number(estimate?.caloriesKcal ?? 0),
+    protein: Number(estimate?.proteinG ?? 0),
+    fat: Number(estimate?.fatG ?? 0),
+    carbs: Number(estimate?.carbsG ?? 0),
   }
 }

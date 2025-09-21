@@ -1,0 +1,101 @@
+Category,Food item,Standard unit size,Calories,Protein (g),Fat (g),Carbs (g),Source
+Protein / Meat,"Chicken breast, skinless, cooked, roasted",100 g,165,31.0,3.6,0.0,USDA
+Fruit,"Banana, medium",1 medium (118 g),105,1.3,0.4,27.0,USDA
+Vegetable,"Broccoli, raw",1 cup chopped (91 g),31,2.5,0.3,6.0,USDA
+Bread / Grains,White bread,1 slice (30 g),80,2.5,1.0,14.0,USDA
+Mixed / Prepared,Cheese pizza (regular crust),1 slice (107 g),285,12.0,10.0,35.0,USDA
+Protein / Eggs,"Egg, whole (large)",1 large (50 g),72,6.3,4.8,0.4,USDA
+Dairy,Whole milk,1 cup (240 ml),150,8.0,8.0,12.0,USDA
+Protein / Seafoods,"Salmon, Atlantic, cooked",100 g,206,22.0,12.0,0.0,USDA
+Protein / Meat,"Ground beef (80/20), cooked",100 g,254,26.0,17.0,0.0,USDA
+Vegetable,"Carrots, raw",1 cup sliced (128 g),52,1.2,0.3,12.0,USDA
+Fruit,"Apple, medium",1 medium (182 g),95,0.5,0.3,25.0,USDA
+Dairy,Cheddar cheese slice,1 slice (28 g),113,7.0,9.0,0.4,USDA
+Mixed / Sweets,"Ice cream, vanilla",1/2 cup (66 g),137,2.3,7.3,16.5,USDA
+Grains / Pasta,"Spaghetti, cooked",1 cup (140 g),221,8.0,1.3,43.0,USDA
+Dairy Alt.,"Yogurt, plain, low-fat",1 cup (245 g),154,12.9,3.8,17.4,USDA
+Snack / Sweets,"Pretzels, hard",1 oz (28 g),108,2.9,0.8,22.8,USDA
+Grains / Breakfast,"Oatmeal, cooked",1 cup (234 g),158,6.0,3.2,27.0,USDA
+Snack / Sweets,Chocolate chip cookie,1 cookie (16 g),80,1.0,4.5,10.0,USDA
+Vegetable / Starch,"Potato, baked with skin",1 medium (173 g),161,4.3,0.2,37.0,USDA
+Fruit,"Orange, medium",1 medium (131 g),62,1.2,0.2,15.0,USDA
+Protein / Meat,"Turkey breast, roasted",100 g,159,32.0,2.6,0.0,USDA
+Protein / Meat,"Chicken thigh, skinless, cooked",100 g,179,25.0,8.0,0.0,USDA
+Protein / Meat,"Bacon, pan-fried",1 slice (8 g),43,3.0,3.3,0.1,USDA
+Protein / Meat,"Ham, sliced (deli)",2 oz (56 g),70,10.0,2.0,1.0,USDA
+Protein / Meat,Hot dog (beef/pork),1 link (45 g),150,5.0,13.0,2.0,USDA
+Protein / Meat,"Shrimp, cooked",100 g,99,24.0,0.3,0.2,USDA
+Protein / Meat,"Tuna, canned in water",1 can drained (165 g),191,42.0,1.4,0.0,USDA
+Protein / Plant,"Tofu, firm",100 g,144,15.0,8.0,3.0,USDA
+Nuts / Spreads,Peanut butter (creamy),2 Tbsp (32 g),188,7.0,16.0,8.0,USDA
+Nuts / Snack,"Almonds, raw",1 oz (28 g),164,6.0,14.0,6.0,USDA
+Nuts / Snack,"Mixed nuts, salted",1 oz (28 g),172,5.0,15.0,6.0,USDA
+Bread / Grains,"Bagel, plain",1 medium (105 g),289,11.0,2.0,56.0,USDA
+Bread / Grains,English muffin,1 muffin (57 g),134,5.0,1.0,27.0,USDA
+Bread / Grains,"Tortilla, flour",1 medium (49 g),159,5.0,4.2,26.0,USDA
+Bread / Grains,"Tortilla, corn",1 medium (24 g),52,1.4,0.7,11.0,USDA
+Grains / Rice,"White rice, cooked",1 cup (158 g),205,4.2,0.4,45.0,USDA
+Grains / Rice,"Brown rice, cooked",1 cup (195 g),218,5.0,1.6,45.0,USDA
+Grains / Alt,"Quinoa, cooked",1 cup (185 g),222,8.0,3.6,39.0,USDA
+Grains / Cereal,Corn flakes,1 cup (28 g),100,2.0,0.1,24.0,USDA
+Grains / Snack,Granola,1/2 cup (55 g),220,6.0,10.0,32.0,USDA
+Grains / Pasta,Macaroni & cheese (prepared),1 cup (189 g),310,10.0,12.0,45.0,USDA
+Grains / Noodle,"Instant ramen, prepared",1 package (85 g dry),380,8.0,14.0,52.0,USDA
+Mixed / Prepared,Hamburger (plain),1 sandwich (100 g),250,12.0,9.0,30.0,USDA
+Bread / Grains,Hamburger bun,1 bun (52 g),140,4.0,2.0,26.0,USDA
+Bread / Grains,Hot dog bun,1 bun (43 g),120,4.0,2.0,22.0,USDA
+Snack / Crackers,Saltine crackers,5 crackers (15 g),62,1.0,1.3,11.0,USDA
+Snack / Chips,Potato chips,1 oz (28 g),152,2.0,10.0,15.0,USDA
+Dairy,2% milk,1 cup (240 ml),122,8.0,5.0,12.0,USDA
+Dairy,Skim milk,1 cup (240 ml),83,8.0,0.0,12.0,USDA
+Dairy,"Greek yogurt, nonfat",1 cup (245 g),100,10.0,0.0,6.0,USDA
+Dairy,Cream cheese,1 Tbsp (14 g),50,1.0,5.0,1.0,USDA
+Dairy,"Butter, salted",1 Tbsp (14 g),102,0.1,11.5,0.01,USDA
+Vegetables,"Lettuce, iceberg",1 cup (72 g),10,0.6,0.1,2.0,USDA
+Vegetables,Romaine lettuce,1 cup (47 g),8,0.6,0.1,1.5,USDA
+Vegetables,"Spinach, raw",1 cup (30 g),7,0.9,0.1,1.1,USDA
+Vegetables,"Kale, raw",1 cup (67 g),33,2.9,0.6,6.0,USDA
+Vegetables,"Cauliflower, raw",1 cup (107 g),27,2.1,0.3,5.0,USDA
+Vegetables,"Celery, raw",1 cup (101 g),16,0.7,0.2,3.0,USDA
+Vegetables,"Bell pepper, red",1 cup (149 g),46,1.5,0.5,9.0,USDA
+Vegetables,"Onion, raw",1 cup (160 g),64,1.8,0.2,15.0,USDA
+Vegetables,"Tomato, raw",1 medium (123 g),22,1.1,0.2,4.8,USDA
+Vegetables,"Cucumber, raw",1 medium (201 g),30,1.3,0.2,6.0,USDA
+Vegetables,"Zucchini, raw",1 medium (196 g),33,2.4,0.6,6.0,USDA
+Vegetables,"Green beans, cooked",1 cup (125 g),44,2.4,0.3,10.0,USDA
+Vegetables,"Corn, cooked",1 cup (166 g),143,5.1,2.2,31.0,USDA
+Vegetables,French fries (fast food),Medium (117 g),365,4.0,17.0,48.0,USDA
+Vegetables,"Sweet potato, baked",1 medium (130 g),112,2.0,0.1,26.0,USDA
+Vegetables,"Mushrooms, raw",1 cup (72 g),15,2.2,0.2,2.3,USDA
+Vegetables,"Pickles, dill",1 spear (35 g),4,0.2,0.0,0.9,USDA
+Fruit,Grapes,1 cup (151 g),104,1.1,0.2,27.0,USDA
+Fruit,"Strawberries, raw",1 cup (152 g),49,1.0,0.5,12.0,USDA
+Fruit,"Blueberries, raw",1 cup (148 g),84,1.1,0.5,21.0,USDA
+Fruit,"Raspberries, raw",1 cup (123 g),64,1.5,0.8,15.0,USDA
+Fruit,"Watermelon, raw",1 cup (152 g),46,0.9,0.2,12.0,USDA
+Fruit,"Pineapple, raw",1 cup (165 g),83,0.9,0.2,22.0,USDA
+Fruit,"Peach, raw",1 medium (150 g),58,1.0,0.4,14.0,USDA
+Fruit,"Pear, raw",1 medium (178 g),101,1.0,0.3,27.0,USDA
+Fruit,"Lemon, raw",1 fruit (58 g),17,0.6,0.2,5.4,USDA
+Fruit,"Lime, raw",1 fruit (67 g),20,0.5,0.1,7.1,USDA
+Fruit,"Avocado, raw",1/2 medium (100 g),160,2.0,15.0,9.0,USDA
+Fruit,Raisins,1 oz (28 g),85,1.0,0.1,22.0,USDA
+Fruit,"Cranberries, dried, sweetened",1/4 cup (40 g),123,0.1,0.5,33.0,USDA
+Fruit,"Mango, raw",1 cup (165 g),99,1.4,0.6,25.0,USDA
+Fruit,"Cantaloupe, raw",1 cup (156 g),54,1.3,0.3,13.0,USDA
+Fruit,"Cherries, sweet, raw",1 cup (154 g),97,1.6,0.3,25.0,USDA
+Fruit,"Grapefruit, raw",1/2 fruit (123 g),52,1.0,0.2,13.0,USDA
+Snack / Sweet,Brownie,1 piece (40 g),172,2.0,8.0,24.0,USDA
+Snack / Sweet,"Donut, glazed",1 medium (52 g),190,3.0,11.0,22.0,USDA
+Snack / Sweet,"Candy bar, milk chocolate",1 bar (44 g),229,3.0,13.0,26.0,USDA
+Snack / Bar,Granola bar,1 bar (24 g),99,2.0,3.0,17.0,USDA
+Snack,"Popcorn, buttered, popped",3 cups (24 g),133,2.7,7.1,15.0,USDA
+Snack,"Pretzel, soft",1 large (120 g),389,9.0,3.0,80.0,USDA
+Snack,Potato chips (duplicate variety),1 oz (28 g),152,2.0,10.0,15.0,USDA
+Beverage,Cola soda,12 fl oz (355 ml),150,0.0,0.0,39.0,USDA
+Beverage,Orange juice,1 cup (248 g),112,1.7,0.5,26.0,USDA
+Beverage,"Coffee, black",1 cup (240 ml),2,0.3,0.0,0.0,USDA
+Beverage,"Beer, regular",12 fl oz (355 ml),153,1.6,0.0,13.0,USDA
+Beverage,"Wine, red",5 fl oz (148 ml),125,0.1,0.0,4.0,USDA
+Snack / Dairy,"Greek yogurt, flavored",1 cup (150 g),146,11.0,4.0,20.0,USDA
+Snack / Sweet,"Cupcake, chocolate frosted",1 small (43 g),180,1.5,9.0,24.0,USDA

@@ -4,7 +4,7 @@ import { useCallback } from 'react'
 
 import { confirmMealOnServer, fetchDaySnapshot } from '@/lib/api/client'
 import { useCoachStore } from '@/lib/state/coach-store'
-import type { CoachMessage, FoodItemDraft, MealLog } from '@/lib/types'
+import type { CoachMessage, FoodItemDraft, MealLog, MacroBreakdown, StructuredMealItem } from '@/lib/types'
 import { buildDayId } from '@/lib/utils'
 
 export function useFoodItemDrafts() {
@@ -21,14 +21,18 @@ export function useFoodItemDrafts() {
       const now = new Date()
 
       // Create a meal log for this individual food item
+      const item = draft.payload.item
+      const label = formatItemLabel(item)
+      const macros = nutritionToMacroBreakdown(item.nutritionEstimate)
+
       const meal: MealLog = {
         id: crypto.randomUUID(),
         dayId,
         date: state.activeDate,
         type: draft.mealType,
-        items: [draft.payload.item],
-        macros: draft.payload.macros,
-        source: draft.payload.source === 'text' ? 'api' : draft.payload.source,
+        items: [label],
+        macros,
+        source: draft.payload.source === 'heuristic' ? 'est' : 'api',
         createdAt: now.toISOString(),
       }
 
@@ -51,7 +55,7 @@ export function useFoodItemDrafts() {
       const coachMessage: CoachMessage = {
         id: crypto.randomUUID(),
         role: 'coach',
-        content: `Added ${meal.items[0]} (~${Math.round(meal.macros.protein)}g protein / ${Math.round(meal.macros.calories)} cal).`,
+        content: `Added ${label} (~${Math.round(meal.macros.protein)}g protein / ${Math.round(meal.macros.calories)} cal).`,
         createdAt: new Date().toISOString(),
       }
 
@@ -67,17 +71,40 @@ export function useFoodItemDrafts() {
     [dispatch],
   )
 
-  const updateFoodItem = useCallback(
-    (draftId: string, updates: Partial<FoodItemDraft['payload']>) => {
-      dispatch({ type: 'updateFoodItemDraft', draftId, updates })
-    },
-    [dispatch],
-  )
-
   return {
     drafts: state.foodItemDrafts,
     confirmFoodItem,
     dismissFoodItem,
-    updateFoodItem,
+  }
+}
+
+function formatItemLabel(item: StructuredMealItem): string {
+  const quantity = item.quantity.display ?? buildQuantityDisplay(item)
+  const cleanedName = item.name || item.rawText
+  if (quantity) {
+    return `${quantity.trim()} ${cleanedName}`.trim()
+  }
+  return cleanedName
+}
+
+function buildQuantityDisplay(item: StructuredMealItem): string | null {
+  const { value, unit } = item.quantity
+  if (value == null) {
+    return null
+  }
+
+  if (!unit) {
+    return String(value)
+  }
+
+  return `${value} ${unit}`
+}
+
+function nutritionToMacroBreakdown(estimate: StructuredMealItem['nutritionEstimate']): MacroBreakdown {
+  return {
+    calories: Number(estimate?.caloriesKcal ?? 0),
+    protein: Number(estimate?.proteinG ?? 0),
+    fat: Number(estimate?.fatG ?? 0),
+    carbs: Number(estimate?.carbsG ?? 0),
   }
 }

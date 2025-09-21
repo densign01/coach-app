@@ -12,11 +12,6 @@ export async function POST(request: Request) {
   const result = await parseMealFromText(body.text)
 
   return NextResponse.json({
-    draft: {
-      mealType: result.mealType,
-      items: result.items,
-      macros: result.macros,
-      confidence: result.confidence,
-    },
+    draft: result,
   })
 }

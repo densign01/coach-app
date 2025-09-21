@@ -29,7 +29,7 @@ export default function CoachApp() {
   const { messages, sendMessage, isProcessing, error } = useCoachChat()
   const { state } = useCoachStore()
   const { drafts, confirmDraft, dismissDraft } = useMealDrafts()
-  const { drafts: foodItemDrafts, confirmFoodItem, dismissFoodItem, updateFoodItem } = useFoodItemDrafts()
+  const { drafts: foodItemDrafts, confirmFoodItem, dismissFoodItem } = useFoodItemDrafts()
 
   useEffect(() => {
     if (!isSessionLoading && !session) {
@@ -136,7 +136,6 @@ export default function CoachApp() {
                     draft={draft}
                     onConfirm={() => void confirmFoodItem(draft)}
                     onDismiss={() => dismissFoodItem(draft.id)}
-                    onUpdate={(updates) => updateFoodItem(draft.id, updates)}
                   />
                 ))}
               </div>
@@ -407,7 +406,7 @@ function MealDraftCard({ draft, onConfirm, onDismiss }: MealDraftCardProps) {
             <ul className="mt-1 list-disc space-y-1 pl-5 text-sm text-muted-foreground">
               {draft.payload.items.map((item, index) => (
                 <li key={`${draft.id}-item-${index}`} className="leading-snug">
-                  {item}
+                  {typeof item === 'string' ? item : formatStructuredItemSummary(item)}
                 </li>
               ))}
             </ul>
@@ -458,22 +457,29 @@ interface FoodItemDraftCardProps {
   draft: FoodItemDraft
   onConfirm: () => void
   onDismiss: () => void
-  onUpdate: (updates: Partial<FoodItemDraft['payload']>) => void
 }
 
-function FoodItemDraftCard({ draft, onConfirm, onDismiss, onUpdate }: FoodItemDraftCardProps) {
-  const macros = draft.payload.macros
+function FoodItemDraftCard({ draft, onConfirm, onDismiss }: FoodItemDraftCardProps) {
+  const item = draft.payload.item
+  const macros = nutritionToMacroBreakdown(item.nutritionEstimate)
   const confidence = draft.payload.confidence
+  const quantityLabel = item.quantity.display ?? buildQuantityDisplay(item)
 
   return (
     <Card className="p-4 border-dashed border-blue-300/60 bg-blue-50/30">
       <div className="flex justify-between items-start">
         <div className="flex-1">
           <p className="text-sm font-semibold text-blue-900">Add this food item?</p>
-          <p className="text-sm text-blue-800 mt-1 font-medium">{draft.payload.item}</p>
+          <p className="text-sm text-blue-800 mt-1 font-medium">
+            {quantityLabel ? `${quantityLabel} ` : ''}
+            {item.name || item.rawText}
+          </p>
           <p className="text-xs text-blue-600/80 mt-1">
             {draft.mealType.charAt(0).toUpperCase() + draft.mealType.slice(1)} • Confidence: {confidence.toUpperCase()}
           </p>
+          {item.flags?.needsLookup ? (
+            <p className="text-[11px] text-blue-600 mt-1">Nutrition will be refined once we match it to a database item.</p>
+          ) : null}
         </div>
         <Button variant="ghost" size="sm" onClick={onDismiss} className="text-blue-600 hover:text-blue-800">
           ✕
@@ -482,19 +488,19 @@ function FoodItemDraftCard({ draft, onConfirm, onDismiss, onUpdate }: FoodItemDr
 
       <div className="grid grid-cols-4 gap-3 text-center text-xs mt-4 p-2 bg-white/50 rounded">
         <div>
-          <p className="font-semibold text-blue-900">{macros.calories}</p>
+          <p className="font-semibold text-blue-900">{formatNumber(macros.calories)}</p>
           <p className="text-blue-600">cal</p>
         </div>
         <div>
-          <p className="font-semibold text-blue-900">{macros.protein}g</p>
+          <p className="font-semibold text-blue-900">{formatNumber(macros.protein)}g</p>
           <p className="text-blue-600">protein</p>
         </div>
         <div>
-          <p className="font-semibold text-blue-900">{macros.fat}g</p>
+          <p className="font-semibold text-blue-900">{formatNumber(macros.fat)}g</p>
           <p className="text-blue-600">fat</p>
         </div>
         <div>
-          <p className="font-semibold text-blue-900">{macros.carbs}g</p>
+          <p className="font-semibold text-blue-900">{formatNumber(macros.carbs)}g</p>
           <p className="text-blue-600">carbs</p>
         </div>
       </div>
@@ -509,4 +515,36 @@ function FoodItemDraftCard({ draft, onConfirm, onDismiss, onUpdate }: FoodItemDr
       </div>
     </Card>
   )
+}
+
+function nutritionToMacroBreakdown(estimate: FoodItemDraft['payload']['item']['nutritionEstimate']): {
+  calories: number
+  protein: number
+  fat: number
+  carbs: number
+} {
+  return {
+    calories: Number(estimate?.caloriesKcal ?? 0),
+    protein: Number(estimate?.proteinG ?? 0),
+    fat: Number(estimate?.fatG ?? 0),
+    carbs: Number(estimate?.carbsG ?? 0),
+  }
+}
+
+function buildQuantityDisplay(item: FoodItemDraft['payload']['item']): string | null {
+  const { value, unit } = item.quantity
+  if (value == null) return null
+  if (!unit || unit === 'other') {
+    return String(value)
+  }
+  return `${value} ${unit}`
+}
+
+function formatNumber(value: number): string {
+  return Number.isFinite(value) ? Math.round(value).toString() : '0'
+}
+
+function formatStructuredItemSummary(item: FoodItemDraft['payload']['item']): string {
+  const quantity = item.quantity.display ?? buildQuantityDisplay(item)
+  return `${quantity ? `${quantity} ` : ''}${item.name || item.rawText}`.trim()
 }

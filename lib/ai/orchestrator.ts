@@ -2,6 +2,7 @@ import { detectIntent } from '@/lib/ai/intents'
 import { generateCoachResponse, requestMealDraftFromText, upsertUserProfile } from '@/lib/api/client'
 import { parseMealFromText } from '@/lib/ai/parsers'
 import { parseWorkoutFromText } from '@/lib/ai/workouts'
+import { enrichNutritionEstimates } from '@/lib/ai/macro-estimator'
 import {
   getNextOnboardingStep,
   getOnboardingStep,
@@ -12,7 +13,18 @@ import {
   generateProfileSummary,
 } from '@/lib/ai/onboarding'
 import { calculateDailyTotals, getDaySummary, getUpcomingPlan, getWeeklyWorkoutStats } from '@/lib/data/queries'
-import type { CoachState, MealDraft, FoodItemDraft, MacroBreakdown, MealType, WorkoutLog, UserProfile } from '@/lib/types'
+import type {
+  CoachState,
+  MealDraft,
+  FoodItemDraft,
+  MacroBreakdown,
+  MealType,
+  MealParseResult,
+  NutritionEstimate,
+  StructuredMealItem,
+  WorkoutLog,
+  UserProfile,
+} from '@/lib/types'
 import { buildDayId } from '@/lib/utils'
 
 interface CoachReply {
@@ -66,45 +78,40 @@ export async function orchestrateCoachReply(message: string, state: CoachState):
 
 async function handleMealLogging(text: string, state: CoachState): Promise<CoachReply> {
   const draftFromApi = await requestMealDraftFromText(text)
-  const parsed = draftFromApi
-    ? {
-        mealType: (draftFromApi.mealType ?? 'snack') as MealType,
-        items: draftFromApi.items.map((item) => ({
-          name: item.name,
-          macros: parsedMacros(item.macros),
-        })),
-        macros: parsedMacros(draftFromApi.macros),
-        confidence: draftFromApi.confidence,
-      }
-    : await parseMealFromText(text)
+  const parsed: MealParseResult = draftFromApi ?? (await parseMealFromText(text))
 
   console.log('[ORCHESTRATOR] Parsed meal result:', parsed)
 
-  // Create individual food item drafts instead of one big meal draft
+  const normalizedMealType = toAppMealType(parsed.mealType)
   const groupId = crypto.randomUUID()
   const now = new Date().toISOString()
 
-  const foodItemDrafts: FoodItemDraft[] = parsed.items.map((item) => ({
+  const enrichedItems = await enrichNutritionEstimates(parsed.items, {
+    mealType: parsed.mealType,
+    inputText: text,
+  })
+
+  const foodItemDrafts: FoodItemDraft[] = enrichedItems.map((item) => ({
     id: crypto.randomUUID(),
     createdAt: now,
-    mealType: parsed.mealType,
+    mealType: normalizedMealType,
     groupId,
     payload: {
-      item: item.name,
-      macros: item.macros,
-      confidence: parsed.confidence,
-      source: 'text',
+      item: cloneStructuredItem(item),
       originalText: text,
+      confidence: parsed.confidence,
+      source: parsed.audit?.source === 'heuristic' ? 'heuristic' : 'llm',
     },
   }))
 
   console.log('[ORCHESTRATOR] Created food item drafts:', foodItemDrafts)
 
-  const totalMacros = parsed.macros
+  const totalEstimate = parsed.totals ?? computeTotalsFromItems(enrichedItems)
+  const totalMacros = nutritionEstimateToMacroBreakdown(totalEstimate)
   const todaysTotals = calculateDailyTotals(state.meals.filter((meal) => meal.date === state.activeDate))
   const projectedTotals = addMacros(todaysTotals, totalMacros)
 
-  const itemsList = parsed.items.map((item) => item.name).join(', ')
+  const itemsList = enrichedItems.map((item) => item.name).join(', ')
   const mealSummary = `${itemsList} (~${Math.round(totalMacros.protein)}g protein / ${Math.round(totalMacros.calories)} cal)`
 
   const aiResponse = await generateCoachResponse({
@@ -212,6 +219,101 @@ function describeUpcomingPlan(state: CoachState) {
   return `Today's plan: ${plan.focus} for about ${plan.minutesTarget} minutes at a ${plan.suggestedIntensity} pace. Want to stick with it or adjust?`
 }
 
+function toAppMealType(mealType: MealParseResult['mealType']): MealType {
+  switch (mealType) {
+    case 'breakfast':
+    case 'lunch':
+    case 'dinner':
+    case 'snack':
+      return mealType
+    case 'drink':
+    case 'unknown':
+    default:
+      return inferMealTypeFromClock()
+  }
+}
+
+function inferMealTypeFromClock(): MealType {
+  const hour = new Date().getHours()
+  if (hour < 11) return 'breakfast'
+  if (hour < 15) return 'lunch'
+  if (hour < 20) return 'dinner'
+  return 'snack'
+}
+
+function cloneStructuredItem(item: StructuredMealItem): StructuredMealItem {
+  return {
+    ...item,
+    preparation: [...(item.preparation ?? [])],
+    quantity: { ...item.quantity },
+    alcohol: item.alcohol ? { ...item.alcohol } : null,
+    nutritionEstimate: item.nutritionEstimate ? { ...item.nutritionEstimate } : null,
+    lookup: item.lookup
+      ? {
+          status: item.lookup.status,
+          candidates: [...item.lookup.candidates.map((candidate) => ({ ...candidate }))],
+        }
+      : undefined,
+    flags: item.flags ? { ...item.flags } : undefined,
+  }
+}
+
+function computeTotalsFromItems(items: StructuredMealItem[]): NutritionEstimate | null {
+  let hasValues = false
+  const totals = items.reduce<NutritionEstimate>(
+    (acc, item) => {
+      const nutrition = item.nutritionEstimate
+      if (!nutrition) {
+        return acc
+      }
+      hasValues = true
+      return {
+        caloriesKcal: sumNumbers(acc.caloriesKcal, nutrition.caloriesKcal),
+        proteinG: sumNumbers(acc.proteinG, nutrition.proteinG),
+        carbsG: sumNumbers(acc.carbsG, nutrition.carbsG),
+        fatG: sumNumbers(acc.fatG, nutrition.fatG),
+        fiberG: sumNumbers(acc.fiberG ?? null, nutrition.fiberG ?? null),
+        source: nutrition.source ?? acc.source,
+        confidence: averageNumeric(acc.confidence, nutrition.confidence),
+      }
+    },
+    {
+      caloriesKcal: 0,
+      proteinG: 0,
+      carbsG: 0,
+      fatG: 0,
+      fiberG: 0,
+      source: 'heuristic',
+      confidence: 0.5,
+    },
+  )
+
+  return hasValues ? totals : null
+}
+
+function nutritionEstimateToMacroBreakdown(nutrition: NutritionEstimate | null | undefined): MacroBreakdown {
+  return {
+    calories: Number(nutrition?.caloriesKcal ?? 0),
+    protein: Number(nutrition?.proteinG ?? 0),
+    fat: Number(nutrition?.fatG ?? 0),
+    carbs: Number(nutrition?.carbsG ?? 0),
+  }
+}
+
+function sumNumbers(a: number | null | undefined, b: number | null | undefined): number | null {
+  const first = a ?? 0
+  const second = b ?? 0
+  const total = first + second
+  return Number.isNaN(total) ? null : Number(total.toFixed(2))
+}
+
+function averageNumeric(a: number | null | undefined, b: number | null | undefined): number | null {
+  const values = [a, b].filter((value): value is number => value !== null && value !== undefined)
+  if (values.length === 0) return null
+  const total = values.reduce((acc, value) => acc + value, 0)
+  return Number((total / values.length).toFixed(2))
+}
+
 function summarizeNutrition(state: CoachState) {
   const { meals, totals } = getDaySummary(state, state.activeDate)
   if (meals.length === 0) {
@@ -287,15 +389,6 @@ function fallbackGeneral(state: CoachState) {
   }
 
   return "Thanks for sharing. Want me to log anything else or adjust today's plan?"
-}
-
-function parsedMacros(macros: MacroBreakdown) {
-  return {
-    calories: Number(macros.calories ?? 0),
-    protein: Number(macros.protein ?? 0),
-    fat: Number(macros.fat ?? 0),
-    carbs: Number(macros.carbs ?? 0),
-  }
 }
 
 function describeMood(mood: 'tired' | 'sore' | 'energized' | 'neutral', message: string) {

@@ -13,6 +13,100 @@ export interface MacroBreakdown {
 
 export type MealSource = 'api' | 'vision' | 'est' | 'manual' | 'text'
 
+export type ParseConfidence = 'low' | 'medium' | 'high'
+
+export type MealQuantityUnit =
+  | 'count'
+  | 'slice'
+  | 'cup'
+  | 'oz_fl'
+  | 'oz'
+  | 'g'
+  | 'ml'
+  | 'tbsp'
+  | 'tsp'
+  | 'serving'
+  | 'packet'
+  | 'bottle'
+  | 'pint'
+  | 'can'
+  | 'other'
+
+export interface MealItemQuantity {
+  value: number | null
+  unit: MealQuantityUnit | null
+  display?: string | null
+}
+
+export interface NutritionEstimate {
+  caloriesKcal: number | null
+  proteinG: number | null
+  carbsG: number | null
+  fatG: number | null
+  fiberG?: number | null
+  source?: 'usda' | 'brand' | 'heuristic' | 'user'
+  confidence?: number | null
+}
+
+export interface AlcoholInfo {
+  isAlcohol: boolean
+  abvPct?: number | null
+  volumeMl?: number | null
+}
+
+export interface MealItemLookupCandidate {
+  provider: string
+  id: string
+  name: string
+}
+
+export type MealItemLookupStatus = 'pending' | 'matched' | 'ambiguous'
+
+export interface MealItemLookup {
+  status: MealItemLookupStatus
+  candidates: MealItemLookupCandidate[]
+}
+
+export interface MealItemFlags {
+  needsLookup?: boolean
+  needsPortion?: boolean
+}
+
+export type MealSizeHint = 'small' | 'medium' | 'large' | null
+
+export interface StructuredMealItem {
+  rawText: string
+  name: string
+  brand?: string | null
+  preparation?: string[]
+  quantity: MealItemQuantity
+  sizeHint?: MealSizeHint
+  alcohol?: AlcoholInfo | null
+  nutritionEstimate?: NutritionEstimate | null
+  lookup?: MealItemLookup
+  flags?: MealItemFlags
+  confidence?: ParseConfidence
+}
+
+export type MealParseTotals = NutritionEstimate
+
+export interface MealParseAudit {
+  messageId?: string
+  inputText: string
+  parsedBy?: string
+  version?: string
+  source?: 'llm' | 'heuristic'
+}
+
+export interface MealParseResult {
+  mealType: MealType | 'drink' | 'unknown'
+  contextNote?: string | null
+  items: StructuredMealItem[]
+  totals?: MealParseTotals | null
+  confidence: ParseConfidence
+  audit?: MealParseAudit
+}
+
 export interface MealLog {
   id: string
   dayId: string
@@ -72,11 +166,10 @@ export interface FoodItemDraft {
   mealType: MealType
   groupId: string // Links items from same meal input
   payload: {
-    item: string // Single food item like "2 eggs" or "1/2 cup cottage cheese"
-    macros: MacroBreakdown
-    confidence: 'low' | 'medium' | 'high'
-    source: 'text'
+    item: StructuredMealItem
     originalText: string // The full original input text
+    confidence: ParseConfidence
+    source: 'llm' | 'heuristic'
   }
 }
 
@@ -86,12 +179,12 @@ export interface MealDraft {
   createdAt: string
   payload: {
     type?: MealType
-    items?: string[]
+    items?: StructuredMealItem[]
     macros?: Partial<MacroBreakdown>
     notes?: string
     originalText: string
-    confidence: 'low' | 'medium' | 'high'
-    source: 'text'
+    confidence: ParseConfidence
+    source: 'llm' | 'heuristic'
   }
 }
 

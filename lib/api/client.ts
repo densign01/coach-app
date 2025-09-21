@@ -6,35 +6,14 @@ import type {
   DaySnapshot,
   MacroBreakdown,
   MealLog,
+  MealParseResult,
   UserProfile,
   WorkoutLog,
 } from '@/lib/types'
 import type { Database } from '@/lib/supabase/schema'
 import { buildDayId } from '@/lib/utils'
 
-export interface ApiMealItem {
-  name: string
-  macros: {
-    calories: number
-    protein: number
-    fat: number
-    carbs: number
-  }
-}
-
-export interface ApiMealDraft {
-  mealType: string
-  items: ApiMealItem[]
-  macros: {
-    calories: number
-    protein: number
-    fat: number
-    carbs: number
-  }
-  confidence: 'low' | 'medium' | 'high'
-}
-
-export async function requestMealDraftFromText(text: string): Promise<ApiMealDraft | null> {
+export async function requestMealDraftFromText(text: string): Promise<MealParseResult | null> {
   try {
     const response = await fetch('/api/parseMeal', {
       method: 'POST',
