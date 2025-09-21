@@ -20,18 +20,139 @@ const responseSchema = z.object({
   macros: macrosSchema.optional(),
 })
 
-const fallbackMacros: Record<string, MacroBreakdown> = {
-  chicken: { calories: 350, protein: 35, fat: 12, carbs: 5 },
-  salad: { calories: 180, protein: 5, fat: 10, carbs: 15 },
-  yogurt: { calories: 150, protein: 15, fat: 4, carbs: 20 },
-  smoothie: { calories: 220, protein: 12, fat: 5, carbs: 35 },
-  oatmeal: { calories: 240, protein: 8, fat: 5, carbs: 42 },
-  sandwich: { calories: 420, protein: 28, fat: 15, carbs: 45 },
-  rice: { calories: 200, protein: 4, fat: 2, carbs: 44 },
-  steak: { calories: 500, protein: 45, fat: 26, carbs: 0 },
-  eggs: { calories: 210, protein: 18, fat: 14, carbs: 2 },
-  pasta: { calories: 480, protein: 18, fat: 12, carbs: 70 },
+type FoodUnit = 'serving' | 'cup' | 'tbsp' | 'tsp' | 'oz' | 'gram' | 'piece' | 'slice'
+
+interface FoodMacroEstimate {
+  keywords: string[]
+  unit: FoodUnit
+  amount: number
+  macros: MacroBreakdown
 }
+
+const DEFAULT_UNKNOWN_MACROS: MacroBreakdown = { calories: 200, protein: 7, fat: 8, carbs: 26 }
+
+const FOOD_MACRO_DATABASE: FoodMacroEstimate[] = [
+  {
+    keywords: ['blueberries', 'blueberry'],
+    unit: 'cup',
+    amount: 1,
+    macros: { calories: 85, protein: 1, fat: 0.5, carbs: 21 },
+  },
+  {
+    keywords: ['strawberries', 'strawberry'],
+    unit: 'cup',
+    amount: 1,
+    macros: { calories: 50, protein: 1, fat: 0.5, carbs: 12 },
+  },
+  {
+    keywords: ['banana'],
+    unit: 'piece',
+    amount: 1,
+    macros: { calories: 105, protein: 1.3, fat: 0.4, carbs: 27 },
+  },
+  {
+    keywords: ['apple'],
+    unit: 'piece',
+    amount: 1,
+    macros: { calories: 95, protein: 0.5, fat: 0.3, carbs: 25 },
+  },
+  {
+    keywords: ['greek yogurt', 'yogurt'],
+    unit: 'cup',
+    amount: 1,
+    macros: { calories: 120, protein: 20, fat: 0, carbs: 9 },
+  },
+  {
+    keywords: ['oatmeal', 'oats'],
+    unit: 'cup',
+    amount: 1,
+    macros: { calories: 150, protein: 5, fat: 3, carbs: 27 },
+  },
+  {
+    keywords: ['chicken breast', 'chicken'],
+    unit: 'oz',
+    amount: 4,
+    macros: { calories: 187, protein: 35, fat: 4, carbs: 0 },
+  },
+  {
+    keywords: ['salad'],
+    unit: 'serving',
+    amount: 1,
+    macros: { calories: 180, protein: 5, fat: 10, carbs: 15 },
+  },
+  {
+    keywords: ['smoothie'],
+    unit: 'serving',
+    amount: 1,
+    macros: { calories: 230, protein: 12, fat: 4, carbs: 38 },
+  },
+  {
+    keywords: ['sandwich'],
+    unit: 'serving',
+    amount: 1,
+    macros: { calories: 420, protein: 25, fat: 15, carbs: 45 },
+  },
+  {
+    keywords: ['rice'],
+    unit: 'cup',
+    amount: 1,
+    macros: { calories: 205, protein: 4, fat: 0.5, carbs: 45 },
+  },
+  {
+    keywords: ['steak'],
+    unit: 'oz',
+    amount: 4,
+    macros: { calories: 310, protein: 30, fat: 20, carbs: 0 },
+  },
+  {
+    keywords: ['egg', 'eggs'],
+    unit: 'piece',
+    amount: 1,
+    macros: { calories: 78, protein: 6, fat: 5, carbs: 1 },
+  },
+  {
+    keywords: ['pasta'],
+    unit: 'cup',
+    amount: 1,
+    macros: { calories: 220, protein: 8, fat: 1, carbs: 43 },
+  },
+  {
+    keywords: ['english muffin'],
+    unit: 'piece',
+    amount: 1,
+    macros: { calories: 120, protein: 5, fat: 1, carbs: 23 },
+  },
+  {
+    keywords: ['cream cheese'],
+    unit: 'tbsp',
+    amount: 1,
+    macros: { calories: 50, protein: 1, fat: 5, carbs: 1 },
+  },
+  {
+    keywords: ['almond butter', 'peanut butter', 'nut butter'],
+    unit: 'tbsp',
+    amount: 1,
+    macros: { calories: 95, protein: 3.5, fat: 8, carbs: 3.5 },
+  },
+  {
+    keywords: ['spinach'],
+    unit: 'cup',
+    amount: 1,
+    macros: { calories: 7, protein: 1, fat: 0, carbs: 1 },
+  },
+  {
+    keywords: ['avocado'],
+    unit: 'piece',
+    amount: 1,
+    macros: { calories: 240, protein: 3, fat: 22, carbs: 12 },
+  },
+  {
+    keywords: ['broccoli'],
+    unit: 'cup',
+    amount: 1,
+    macros: { calories: 55, protein: 4, fat: 0.5, carbs: 11 },
+  },
+]
 
 export interface ParsedMealItem {
   name: string
@@ -199,17 +320,19 @@ function inferMealType(text: string): MealType {
 }
 
 function estimateItemMacros(item: string): MacroBreakdown {
-  const key = Object.keys(fallbackMacros).find((food) => item.includes(food))
-  if (!key) {
-    return {
-      calories: 250,
-      protein: 12,
-      fat: 8,
-      carbs: 28,
-    }
+  const normalized = item.toLowerCase()
+  const quantityInfo = extractQuantityInfo(normalized)
+  const estimate = FOOD_MACRO_DATABASE.find((entry) =>
+    entry.keywords.some((keyword) => normalized.includes(keyword)),
+  )
+
+  if (!estimate) {
+    const multiplier = Math.max(quantityInfo?.value ?? 1, 1)
+    return multiplyMacros(DEFAULT_UNKNOWN_MACROS, multiplier)
   }
 
-  return fallbackMacros[key]
+  const multiplier = computeMultiplier(quantityInfo, estimate)
+  return multiplyMacros(estimate.macros, multiplier)
 }
 
 function normalizeMacros(value: MacroBreakdown | undefined): MacroBreakdown {
@@ -231,4 +354,137 @@ function normalizeMacrosFromItems(items: ParsedMealItem[]): MacroBreakdown {
     }),
     { calories: 0, protein: 0, fat: 0, carbs: 0 },
   )
+}
+
+function computeMultiplier(
+  quantityInfo: QuantityInfo | null,
+  estimate: FoodMacroEstimate,
+): number {
+  if (!quantityInfo) {
+    return 1
+  }
+
+  const baseAmount = estimate.amount === 0 ? 1 : estimate.amount
+
+  if (estimate.unit === 'serving') {
+    return (quantityInfo.value ?? 1) / baseAmount
+  }
+
+  if (!quantityInfo.unit) {
+    // No explicit unit, treat numeric prefix as count for piece-based foods
+    if (estimate.unit === 'piece' || estimate.unit === 'slice') {
+      return (quantityInfo.value ?? 1) / baseAmount
+    }
+    return quantityInfo.value ?? 1
+  }
+
+  if (unitsMatch(quantityInfo.unit, estimate.unit)) {
+    return (quantityInfo.value ?? 1) / baseAmount
+  }
+
+  // Unit mismatch — fall back to the numeric quantity
+  return quantityInfo.value ?? 1
+}
+
+interface QuantityInfo {
+  value: number
+  unit?: FoodUnit | null
+}
+
+function extractQuantityInfo(text: string): QuantityInfo | null {
+  const quantityRegex = /(\d+\s*\/\s*\d+|\d+(?:\.\d+)?)(?:\s*)(cups?|cup|c|tablespoons?|tbsp|tbsps?|teaspoons?|tsp|tsps?|ounces?|oz|grams?|g|servings?|serving|pieces?|piece|slices?|slice)\b/i
+
+  const match = quantityRegex.exec(text)
+  if (match) {
+    const value = parseQuantityValue(match[1])
+    const unit = normalizeUnit(match[2])
+    return { value, unit }
+  }
+
+  const leadingMatch = text.match(/^(\d+\s*\/\s*\d+|\d+(?:\.\d+)?)/)
+  if (leadingMatch) {
+    return { value: parseQuantityValue(leadingMatch[1]), unit: null }
+  }
+
+  return null
+}
+
+function parseQuantityValue(raw: string): number {
+  const cleaned = raw.replace(/\s+/g, '')
+  if (cleaned.includes('/')) {
+    const [numerator, denominator] = cleaned.split('/')
+    const num = Number(numerator)
+    const den = Number(denominator)
+    if (!Number.isNaN(num) && !Number.isNaN(den) && den !== 0) {
+      return num / den
+    }
+  }
+
+  const value = Number(cleaned)
+  return Number.isNaN(value) ? 1 : value
+}
+
+function normalizeUnit(raw: string | undefined): FoodUnit | null {
+  if (!raw) return null
+  const unit = raw.toLowerCase().replace(/\./g, '')
+  switch (unit) {
+    case 'cup':
+    case 'cups':
+    case 'c':
+      return 'cup'
+    case 'tablespoon':
+    case 'tablespoons':
+    case 'tbsp':
+    case 'tbsps':
+      return 'tbsp'
+    case 'teaspoon':
+    case 'teaspoons':
+    case 'tsp':
+    case 'tsps':
+      return 'tsp'
+    case 'ounce':
+    case 'ounces':
+    case 'oz':
+      return 'oz'
+    case 'gram':
+    case 'grams':
+    case 'g':
+      return 'gram'
+    case 'serving':
+    case 'servings':
+      return 'serving'
+    case 'piece':
+    case 'pieces':
+      return 'piece'
+    case 'slice':
+    case 'slices':
+      return 'slice'
+    default:
+      return null
+  }
+}
+
+function unitsMatch(first: FoodUnit | null | undefined, second: FoodUnit | null | undefined): boolean {
+  if (!first || !second) return false
+  if (first === second) return true
+  const equivalent: Record<FoodUnit, FoodUnit[]> = {
+    serving: ['serving'],
+    cup: ['cup'],
+    tbsp: ['tbsp'],
+    tsp: ['tsp'],
+    oz: ['oz'],
+    gram: ['gram'],
+    piece: ['piece'],
+    slice: ['slice'],
+  }
+  return equivalent[first]?.includes(second) ?? false
+}
+
+function multiplyMacros(macros: MacroBreakdown, multiplier: number): MacroBreakdown {
+  return {
+    calories: Number((macros.calories * multiplier).toFixed(2)),
+    protein: Number((macros.protein * multiplier).toFixed(2)),
+    fat: Number((macros.fat * multiplier).toFixed(2)),
+    carbs: Number((macros.carbs * multiplier).toFixed(2)),
+  }
 }
