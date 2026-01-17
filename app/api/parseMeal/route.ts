@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 
-import { parseMealFromText } from '@/lib/ai/parsers'
+import { mealParserAgent } from '@/lib/agents'
 
 export async function POST(request: Request) {
   const body = await request.json().catch(() => null)
@@ -9,9 +9,13 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Missing meal text payload' }, { status: 400 })
   }
 
-  const result = await parseMealFromText(body.text)
+  const { result, source } = await mealParserAgent.parsemeal({
+    text: body.text,
+    mealType: body.mealType,
+  })
 
   return NextResponse.json({
     draft: result,
+    source,
   })
 }

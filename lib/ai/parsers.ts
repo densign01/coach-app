@@ -88,7 +88,6 @@ const responseSchema = z.object({
 const FALLBACK_CONFIDENCE: ParseConfidence = 'medium'
 
 export async function parseMealFromText(text: string): Promise<MealParseResult> {
-  console.log('[MEAL_PARSER] Input text:', text)
   const apiKey = process.env.OPENAI_API_KEY
 
   if (apiKey) {
@@ -213,47 +212,39 @@ function heuristicMealParser(text: string): MealParseResult {
 }
 
 function segmentMealText(text: string): string[] {
-  console.log('[MEAL_PARSER] segmentMealText input:', text)
-
   let withoutPrefixes = text
 
   // Remove colon-separated prefixes (e.g., "Meal: ...")
   const step1 = withoutPrefixes.replace(/^[^:]+:\s*/, '')
   if (step1 !== withoutPrefixes) {
-    console.log('[MEAL_PARSER] After colon removal:', step1)
     withoutPrefixes = step1
   }
 
   // Remove conversational meal type prefixes (e.g., "For lunch", "At breakfast", "During dinner")
   const step2 = withoutPrefixes.replace(/^(?:for\s+|at\s+|during\s+|my\s+)?(?:breakfast|lunch|dinner|snack)\s*(?:was|is|=|,)?\s*/i, '')
   if (step2 !== withoutPrefixes) {
-    console.log('[MEAL_PARSER] After meal type removal:', step2)
     withoutPrefixes = step2
   }
 
   // Remove "I had/ate/was eating" constructions
   const step3 = withoutPrefixes.replace(/^(?:i\s+(?:had|ate|was\s+eating|just\s+had))\s*/i, '')
   if (step3 !== withoutPrefixes) {
-    console.log('[MEAL_PARSER] After "I had" removal:', step3)
     withoutPrefixes = step3
   }
 
   // Remove additional conversational starters
   const step4 = withoutPrefixes.replace(/^(?:today\s+)?(?:i\s+)?(?:just\s+|also\s+)?(?:consumed|enjoyed|grabbed)\s*/i, '')
   if (step4 !== withoutPrefixes) {
-    console.log('[MEAL_PARSER] After conversational starters removal:', step4)
     withoutPrefixes = step4
   }
 
   withoutPrefixes = withoutPrefixes.trim()
-  console.log('[MEAL_PARSER] Final cleaned text:', withoutPrefixes)
 
   const parts = withoutPrefixes
     .split(/(?:\s+and\s+|,\s*|\+\s*|\s*&\s*)/)
     .map((part) => part.trim())
     .filter(Boolean)
 
-  console.log('[MEAL_PARSER] Final segmented parts:', parts)
   return parts
 }
 
@@ -688,13 +679,9 @@ export function convertNutritionToFoodDrafts(
 }
 
 export async function parseNutritionFromText(text: string): Promise<NutritionResponse | null> {
-  console.log('[NUTRITION_PARSER] Input text:', text)
-
   try {
     const { generateObject } = await import('ai')
     const { openai } = await import('@ai-sdk/openai')
-
-    console.log('[NUTRITION_PARSER] Using AI SDK with GPT-5 nutrition expert')
 
     const { object } = await generateObject({
       model: openai('gpt-5'),
@@ -718,11 +705,9 @@ Provide the nutrition breakdown for each item and calculate totals.`,
       },
     })
 
-    console.log('[NUTRITION_PARSER] AI SDK parsed nutrition:', object)
     return object
-
   } catch (error) {
-    console.error('[NUTRITION_PARSER] Failed to parse nutrition with AI SDK:', error)
+    console.error('[NUTRITION_PARSER] Failed to parse nutrition:', error)
     return null
   }
 }
@@ -734,12 +719,9 @@ export async function parseSimpleMealFromText(text: string, mealType?: MealType)
   totalMacros: MacroBreakdown
   confidence: ParseConfidence
 } | null> {
-  console.log('[SIMPLE_MEAL_PARSER] Input text:', text)
-
   // Use nutrition expert to get clean, accurate data
   const nutrition = await parseNutritionFromText(text)
   if (!nutrition) {
-    console.warn('[SIMPLE_MEAL_PARSER] No nutrition data returned')
     return null
   }
 
@@ -757,12 +739,9 @@ export async function parseSimpleMealFromText(text: string, mealType?: MealType)
     fat: nutrition.total.fat_g,
   }
 
-  console.log('[SIMPLE_MEAL_PARSER] Created', foodItemDrafts.length, 'food item drafts')
-  console.log('[SIMPLE_MEAL_PARSER] Total macros:', totalMacros)
-
   return {
     foodItemDrafts,
     totalMacros,
-    confidence: 'high', // GPT nutrition expert provides high confidence
+    confidence: 'high',
   }
 }
