@@ -177,17 +177,13 @@ export default function CoachApp() {
       </div>
 
       <Card className="p-6">
-        <h2 className="text-lg font-medium mb-4">Today&apos;s Totals</h2>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
-          <MacroStat label="Calories" value={`${mealTotals.calories.toFixed(0)}`} suffix="cal" />
-          <MacroStat label="Protein" value={`${mealTotals.protein.toFixed(0)}`} suffix="g" />
-          <MacroStat label="Fat" value={`${mealTotals.fat.toFixed(0)}`} suffix="g" />
-          <MacroStat label="Carbs" value={`${mealTotals.carbs.toFixed(0)}`} suffix="g" />
+        <h2 className="text-lg font-medium mb-4">Daily Progress</h2>
+        <div className="space-y-3">
+          <ProgressBar label="Calories" current={mealTotals.calories} target={state.targets.calories} unit="cal" />
+          <ProgressBar label="Protein" current={mealTotals.protein} target={state.targets.protein} unit="g" />
+          <ProgressBar label="Fat" current={mealTotals.fat} target={state.targets.fat} unit="g" />
+          <ProgressBar label="Carbs" current={mealTotals.carbs} target={state.targets.carbs} unit="g" />
         </div>
-        <Separator className="my-4" />
-        <p className="text-sm text-muted-foreground">
-          Target: {state.targets.calories} cal, {state.targets.protein}g protein, {state.targets.fat}g fat, {state.targets.carbs}g carbs
-        </p>
       </Card>
 
       <div className="space-y-4">
@@ -206,7 +202,10 @@ export default function CoachApp() {
                   <Card key={meal.id} className="p-4">
                     <div className="flex justify-between items-start">
                       <div>
-                        <p className="text-sm font-medium">{meal.items.join(", ")}</p>
+                        <div className="flex items-center gap-2">
+                          <p className="text-sm font-medium">{meal.items.join(", ")}</p>
+                          <SourceBadge source={meal.source} />
+                        </div>
                         <p className="text-xs text-muted-foreground mt-1">
                           Logged {new Date(meal.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                         </p>
@@ -361,6 +360,69 @@ function MacroStat({ label, value, suffix }: MacroStatProps) {
       </p>
       <p className="text-sm text-muted-foreground">{label}</p>
     </div>
+  )
+}
+
+interface ProgressBarProps {
+  label: string
+  current: number
+  target: number
+  unit: string
+}
+
+function ProgressBar({ label, current, target, unit }: ProgressBarProps) {
+  const percentage = Math.min((current / target) * 100, 100)
+  const isOver = current > target
+  const isNearTarget = percentage >= 90 && !isOver
+
+  const getBarColor = () => {
+    if (isOver) return "bg-red-500"
+    if (isNearTarget) return "bg-yellow-500"
+    return "bg-green-500"
+  }
+
+  return (
+    <div className="space-y-1">
+      <div className="flex justify-between text-xs">
+        <span className="font-medium">{label}</span>
+        <span className="text-muted-foreground">
+          {current.toFixed(0)}/{target} {unit}
+        </span>
+      </div>
+      <div className="h-2 bg-muted rounded-full overflow-hidden">
+        <div
+          className={`h-full rounded-full transition-all ${getBarColor()}`}
+          style={{ width: `${percentage}%` }}
+        />
+      </div>
+    </div>
+  )
+}
+
+function SourceBadge({ source }: { source: string }) {
+  const getLabel = () => {
+    switch (source) {
+      case 'api': return 'Verified'
+      case 'vision': return 'AI Vision'
+      case 'est': return 'Estimated'
+      case 'manual': return 'Manual'
+      default: return 'AI'
+    }
+  }
+
+  const getColor = () => {
+    switch (source) {
+      case 'api': return 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'
+      case 'vision': return 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300'
+      case 'est': return 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300'
+      default: return 'bg-muted text-muted-foreground'
+    }
+  }
+
+  return (
+    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium ${getColor()}`}>
+      {getLabel()}
+    </span>
   )
 }
 

@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import type { StructuredMealItem, NutritionEstimate } from '@/lib/types'
+import { lookupFood, scaleNutritionToServing, type NormalizedNutrition } from '@/lib/services/usda'
 
 export interface CalorieLookupAgentInput {
   items: StructuredMealItem[]
@@ -82,22 +83,9 @@ export class CalorieLookupAgent {
   })
 
   async enrichNutrition(input: CalorieLookupAgentInput): Promise<CalorieLookupAgentOutput> {
-    console.log('[CalorieLookupAgent] Enriching nutrition for', input.items.length, 'items')
-
-    const apiKey = process.env.OPENAI_API_KEY
-    if (!apiKey) {
-      console.warn('[CalorieLookupAgent] No API key, using heuristic estimates')
-      return {
-        enrichedItems: input.items.map(this.addHeuristicNutrition),
-        confidence: 'low',
-        source: 'heuristic'
-      }
-    }
-
     // Check if items need enrichment
     const needsEnrichment = input.items.some((item) => !item.nutritionEstimate)
     if (!needsEnrichment) {
-      console.log('[CalorieLookupAgent] All items already have nutrition data')
       return {
         enrichedItems: input.items,
         confidence: 'high',
@@ -105,21 +93,107 @@ export class CalorieLookupAgent {
       }
     }
 
-    try {
-      const enrichedItems = await this.callNutritionAPI(apiKey, input.items, input.context)
+    // Step 1: Try USDA database lookup first
+    const usdaEnriched = await this.tryUSDALookup(input.items)
+    const stillNeedsEnrichment = usdaEnriched.some((item) => !item.nutritionEstimate)
+
+    if (!stillNeedsEnrichment) {
       return {
-        enrichedItems,
+        enrichedItems: usdaEnriched,
         confidence: 'high',
         source: 'usda'
       }
-    } catch (error) {
-      console.warn('[CalorieLookupAgent] API enrichment failed, falling back to heuristics:', error)
+    }
+
+    // Step 2: Fall back to GPT for items without USDA data
+    const apiKey = process.env.OPENAI_API_KEY
+    if (!apiKey) {
       return {
-        enrichedItems: input.items.map(this.addHeuristicNutrition),
+        enrichedItems: usdaEnriched.map((item) => this.addHeuristicNutrition(item)),
         confidence: 'low',
         source: 'heuristic'
       }
     }
+
+    try {
+      const enrichedItems = await this.callNutritionAPI(apiKey, usdaEnriched, input.context)
+      return {
+        enrichedItems,
+        confidence: 'high',
+        source: 'llm'
+      }
+    } catch (error) {
+      console.error('[CalorieLookupAgent] API enrichment failed:', error)
+      return {
+        enrichedItems: usdaEnriched.map((item) => this.addHeuristicNutrition(item)),
+        confidence: 'low',
+        source: 'heuristic'
+      }
+    }
+  }
+
+  private async tryUSDALookup(items: StructuredMealItem[]): Promise<StructuredMealItem[]> {
+    const results = await Promise.all(
+      items.map(async (item) => {
+        if (item.nutritionEstimate) return item
+
+        try {
+          const usdaResult = await lookupFood(item.name)
+          if (!usdaResult) return item
+
+          // Estimate serving size in grams (default 100g if no quantity)
+          const servingGrams = this.estimateServingGrams(item.quantity, usdaResult)
+          const scaled = scaleNutritionToServing(usdaResult, servingGrams)
+
+          return {
+            ...item,
+            nutritionEstimate: {
+              caloriesKcal: scaled.calories,
+              proteinG: scaled.protein,
+              carbsG: scaled.carbs,
+              fatG: scaled.fat,
+              fiberG: scaled.fiber ?? null,
+              source: 'usda' as const,
+              confidence: 0.9,
+            },
+            lookup: {
+              status: 'matched' as const,
+              candidates: [{
+                provider: 'usda',
+                id: String(usdaResult.fdcId),
+                name: usdaResult.name,
+              }],
+            },
+          }
+        } catch (error) {
+          console.error('[CalorieLookupAgent] USDA lookup failed for', item.name, error)
+          return item
+        }
+      })
+    )
+
+    return results
+  }
+
+  private estimateServingGrams(quantity: StructuredMealItem['quantity'], usdaData: NormalizedNutrition): number {
+    if (!quantity?.value) return 100
+
+    const unit = quantity.unit?.toLowerCase()
+    const value = quantity.value
+
+    // Convert common units to grams
+    if (unit === 'g' || unit === 'gram' || unit === 'grams') return value
+    if (unit === 'oz') return value * 28.35
+    if (unit === 'cup' || unit === 'cups') return value * 240
+    if (unit === 'tbsp') return value * 15
+    if (unit === 'tsp') return value * 5
+
+    // For count-based items, use USDA serving size as reference
+    if (!unit || unit === 'count' || unit === 'piece' || unit === 'pieces') {
+      return value * (usdaData.servingSize || 100)
+    }
+
+    return 100
   }
 
   async lookupNutrition(text: string): Promise<NutritionResponse | null> {
