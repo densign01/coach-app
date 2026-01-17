@@ -15,6 +15,27 @@ export type MealSource = 'api' | 'vision' | 'est' | 'manual' | 'text'
 
 export type ParseConfidence = 'low' | 'medium' | 'high'
 
+// Simplified nutrition expert types (GPT-inspired)
+export interface SimpleFoodItem {
+  name: string          // "Eggs, large"
+  quantity: number      // 2
+  unit?: string        // "tbsp", "slice", etc
+  calories: number     // 140
+  protein_g: number    // 12
+  carbs_g: number      // 1
+  fat_g: number        // 10
+}
+
+export interface NutritionResponse {
+  items: SimpleFoodItem[]
+  total: {
+    calories: number
+    protein_g: number
+    carbs_g: number
+    fat_g: number
+  }
+}
+
 export type MealQuantityUnit =
   | 'count'
   | 'slice'

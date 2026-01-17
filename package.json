@@ -9,6 +9,7 @@
     "start": "next start"
   },
   "dependencies": {
+    "@ai-sdk/openai": "^2.0.32",
     "@hookform/resolvers": "^3.10.0",
     "@radix-ui/react-accordion": "1.2.2",
     "@radix-ui/react-alert-dialog": "1.1.4",
@@ -41,6 +42,7 @@
     "@supabase/auth-helpers-react": "^0.5.0",
     "@supabase/supabase-js": "2.57.4",
     "@vercel/analytics": "latest",
+    "ai": "^5.0.48",
     "autoprefixer": "^10.4.20",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
@@ -62,7 +64,7 @@
     "tailwind-merge": "^2.5.5",
     "tailwindcss-animate": "^1.0.7",
     "vaul": "^0.9.9",
-    "zod": "3.25.67"
+    "zod": "4.1.11"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.1.9",

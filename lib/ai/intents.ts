@@ -10,7 +10,7 @@ export type CoachIntent =
 
 const mealKeywords = [
   'ate', 'eating', 'breakfast', 'lunch', 'dinner', 'snack',
-  'had', 'slice', 'pizza', 'apple', 'cheese', 'bread', 'egg', 'eggs',
+  'had', 'having', 'slice', 'pizza', 'apple', 'cheese', 'bread', 'egg', 'eggs',
   'cottage', 'muffin', 'meal', 'food', 'drink', 'coffee', 'smoothie',
   'salad', 'sandwich', 'burger', 'chicken', 'beef', 'pasta', 'rice'
 ]
@@ -40,11 +40,23 @@ const progressKeywords = ['progress', 'week', 'adherence', 'how am i doing']
 export function detectIntent(message: string): CoachIntent {
   const normalized = message.toLowerCase()
 
-  if (mealKeywords.some((keyword) => normalized.includes(keyword))) {
+  // Check for requests for estimates/nutrition info (should NOT trigger meal logging)
+  if (
+    normalized.includes('estimate') ||
+    normalized.includes('how many calories') ||
+    normalized.includes('nutrition info') ||
+    normalized.includes('nutritional value') ||
+    (normalized.includes('what') && (normalized.includes('protein') || normalized.includes('calories')))
+  ) {
+    return { type: 'unknown' } // Let it fall through to general conversation
+  }
+
+  // Use word boundaries to avoid false positives like "estimate" matching "ate"
+  if (mealKeywords.some((keyword) => new RegExp(`\\b${keyword}\\b`).test(normalized))) {
     return { type: 'logMeal', payload: { text: message } }
   }
 
-  if (workoutKeywords.some((keyword) => normalized.includes(keyword))) {
+  if (workoutKeywords.some((keyword) => new RegExp(`\\b${keyword}\\b`).test(normalized))) {
     return { type: 'logWorkout', payload: { text: message } }
   }
 

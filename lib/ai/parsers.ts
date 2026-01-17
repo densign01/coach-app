@@ -11,6 +11,9 @@ import type {
   NutritionEstimate,
   ParseConfidence,
   MealSizeHint,
+  NutritionResponse,
+  FoodItemDraft,
+  MacroBreakdown,
 } from '@/lib/types'
 
 const quantitySchema = z.object({
@@ -108,40 +111,21 @@ export async function parseMealFromText(text: string): Promise<MealParseResult> 
 }
 
 async function callOpenAIParser(apiKey: string, text: string): Promise<MealParseResult> {
-  const response = await fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model: 'gpt-5-mini',
-      messages: [
-        {
-          role: 'system',
-          content:
-            'Extract meal items from the user text and respond with JSON only. Use keys: meal_type, context_note, confidence, items[]. Each item must include raw_text, name, quantity {value,unit,display}, size_hint, nutrition_estimate, lookup, flags. Leave nutrition_estimate fields null if unknown. Do not add commentary.',
-        },
-        {
-          role: 'user',
-          content: text,
-        },
-      ],
-      temperature: 0.1,
-    }),
+  const [{ generateObject }, { createOpenAI }] = await Promise.all([
+    import('ai'),
+    import('@ai-sdk/openai'),
+  ])
+
+  const client = createOpenAI({ apiKey })
+
+  const { object: parsed } = await generateObject({
+    model: client('gpt-5-mini'),
+    schema: responseSchema,
+    system:
+      'You are an expert food parsing specialist with deep knowledge of food nomenclature, portion sizes, and meal composition. Your job is to analyze natural language descriptions of meals and extract structured data including individual food items, quantities, units of measurement, and meal classifications. You understand cooking methods, brand variations, and common portion descriptions. Parse food descriptions with precision while handling ambiguity gracefully. Always extract measurable quantities when possible and provide structured JSON output with consistent field names. Extract meal items from the user text and respond with JSON only. Use keys: meal_type, context_note, confidence, items[]. Each item must include raw_text, name, quantity {value,unit,display}, size_hint, nutrition_estimate, lookup, flags. Leave nutrition_estimate fields null if unknown. Do not add commentary.',
+    prompt: text,
+    temperature: 0.1,
   })
-
-  if (!response.ok) {
-    throw new Error(`OpenAI parse request failed: ${response.status}`)
-  }
-
-  const data = await response.json()
-  const content = data.choices?.[0]?.message?.content
-  if (!content) {
-    throw new Error('No content in OpenAI response')
-  }
-
-  const parsed = responseSchema.parse(JSON.parse(content))
 
   const mealType = (parsed.meal_type ?? parsed.mealType ?? 'unknown').toLowerCase()
   const items = parsed.items.map(normalizeLLMItem)
@@ -629,4 +613,156 @@ function inferMealType(text: string): MealType {
   if (hour < 15) return 'lunch'
   if (hour < 20) return 'dinner'
   return 'snack'
+}
+
+// -------- NEW: GPT-Inspired Nutrition Expert Parser --------
+
+const nutritionResponseSchema = z.object({
+  items: z.array(z.object({
+    name: z.string(),
+    quantity: z.number(),
+    unit: z.string().optional(),
+    calories: z.number(),
+    protein_g: z.number(),
+    carbs_g: z.number(),
+    fat_g: z.number(),
+  })),
+  total: z.object({
+    calories: z.number(),
+    protein_g: z.number(),
+    carbs_g: z.number(),
+    fat_g: z.number(),
+  }),
+})
+
+// Convert simplified nutrition response to existing food item drafts format
+export function convertNutritionToFoodDrafts(
+  nutrition: NutritionResponse,
+  originalText: string,
+  mealType: MealType
+): FoodItemDraft[] {
+  const groupId = crypto.randomUUID()
+  const now = new Date().toISOString()
+
+  return nutrition.items.map((item) => {
+    // Convert simplified format to existing StructuredMealItem format
+    const structuredItem: StructuredMealItem = {
+      rawText: `${item.quantity}${item.unit ? ` ${item.unit}` : ''} ${item.name}`,
+      name: item.name,
+      brand: null,
+      preparation: [],
+      quantity: {
+        value: item.quantity,
+        unit: normalizeUnit(item.unit),
+        display: item.unit ? `${item.quantity} ${item.unit}` : String(item.quantity),
+      },
+      sizeHint: null,
+      alcohol: null,
+      nutritionEstimate: {
+        caloriesKcal: item.calories,
+        proteinG: item.protein_g,
+        carbsG: item.carbs_g,
+        fatG: item.fat_g,
+        fiberG: null,
+        source: 'usda',
+        confidence: 0.9, // High confidence from GPT nutrition expert
+      },
+      lookup: { status: 'matched', candidates: [] },
+      flags: { needsLookup: false, needsPortion: false },
+      confidence: 'high',
+    }
+
+    return {
+      id: crypto.randomUUID(),
+      createdAt: now,
+      mealType,
+      groupId,
+      payload: {
+        item: structuredItem,
+        originalText,
+        confidence: 'high',
+        source: 'llm',
+      },
+    }
+  })
+}
+
+export async function parseNutritionFromText(text: string): Promise<NutritionResponse | null> {
+  console.log('[NUTRITION_PARSER] Input text:', text)
+
+  try {
+    const { generateObject } = await import('ai')
+    const { openai } = await import('@ai-sdk/openai')
+
+    console.log('[NUTRITION_PARSER] Using AI SDK with GPT-5 nutrition expert')
+
+    const { object } = await generateObject({
+      model: openai('gpt-5'),
+      schema: nutritionResponseSchema,
+      prompt: `You are an expert nutrition database specialist with comprehensive knowledge of the USDA nutrition database and food composition data. Your role is to provide accurate nutritional information for food items, including calories, macronutrients (protein, carbohydrates, fats), and micronutrients when available. You understand portion size conversions, cooking effects on nutrition, and food preparation variations. Use your internal USDA database knowledge to provide precise nutritional breakdowns. When exact matches aren't available, use comparable foods and clearly indicate confidence levels. Always round calories to nearest 5 and macros to nearest 1g for practical use.
+
+When given food descriptions:
+1. Parse into distinct items with quantities
+2. Use your internal USDA nutrition database (no internet access)
+3. Return JSON with itemized breakdown + totals
+4. Round calories to nearest 5, macros to nearest 1g
+5. Use standardized USDA food names
+
+Food description: "${text}"
+
+Provide the nutrition breakdown for each item and calculate totals.`,
+      providerOptions: {
+        openai: {
+          textVerbosity: 'low', // Concise responses
+        },
+      },
+    })
+
+    console.log('[NUTRITION_PARSER] AI SDK parsed nutrition:', object)
+    return object
+
+  } catch (error) {
+    console.error('[NUTRITION_PARSER] Failed to parse nutrition with AI SDK:', error)
+    return null
+  }
+}
+
+// -------- NEW: Streamlined Meal Parsing using Nutrition Expert --------
+
+export async function parseSimpleMealFromText(text: string, mealType?: MealType): Promise<{
+  foodItemDrafts: FoodItemDraft[]
+  totalMacros: MacroBreakdown
+  confidence: ParseConfidence
+} | null> {
+  console.log('[SIMPLE_MEAL_PARSER] Input text:', text)
+
+  // Use nutrition expert to get clean, accurate data
+  const nutrition = await parseNutritionFromText(text)
+  if (!nutrition) {
+    console.warn('[SIMPLE_MEAL_PARSER] No nutrition data returned')
+    return null
+  }
+
+  // Infer meal type if not provided
+  const inferredMealType = mealType ?? inferMealType(text)
+
+  // Convert to food item drafts format
+  const foodItemDrafts = convertNutritionToFoodDrafts(nutrition, text, inferredMealType)
+
+  // Calculate total macros
+  const totalMacros: MacroBreakdown = {
+    calories: nutrition.total.calories,
+    protein: nutrition.total.protein_g,
+    carbs: nutrition.total.carbs_g,
+    fat: nutrition.total.fat_g,
+  }
+
+  console.log('[SIMPLE_MEAL_PARSER] Created', foodItemDrafts.length, 'food item drafts')
+  console.log('[SIMPLE_MEAL_PARSER] Total macros:', totalMacros)
+
+  return {
+    foodItemDrafts,
+    totalMacros,
+    confidence: 'high', // GPT nutrition expert provides high confidence
+  }
 }
