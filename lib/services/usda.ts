@@ -2,10 +2,15 @@
  * USDA FoodData Central API Client
  * https://fdc.nal.usda.gov/api-guide.html
  *
- * Free API - no key required for basic lookups
+ * Requires free API key from https://api.nal.usda.gov
+ * Set USDA_API_KEY in your environment
  */
 
 const BASE_URL = 'https://api.nal.usda.gov/fdc/v1'
+
+function getApiKey(): string | null {
+  return process.env.USDA_API_KEY || null
+}
 
 export interface USDAFoodItem {
   fdcId: number
@@ -57,7 +62,14 @@ const NUTRIENT_IDS = {
 }
 
 export async function searchFoods(query: string, limit = 5): Promise<USDAFoodItem[]> {
+  const apiKey = getApiKey()
+  if (!apiKey) {
+    console.warn('[USDA] No API key configured (set USDA_API_KEY)')
+    return []
+  }
+
   const params = new URLSearchParams({
+    api_key: apiKey,
     query,
     dataType: 'Foundation,SR Legacy',
     pageSize: String(limit),
@@ -75,7 +87,12 @@ export async function searchFoods(query: string, limit = 5): Promise<USDAFoodIte
 }
 
 export async function getFoodDetails(fdcId: number): Promise<USDAFoodItem | null> {
-  const response = await fetch(`${BASE_URL}/food/${fdcId}`)
+  const apiKey = getApiKey()
+  if (!apiKey) {
+    return null
+  }
+
+  const response = await fetch(`${BASE_URL}/food/${fdcId}?api_key=${apiKey}`)
 
   if (!response.ok) {
     console.error('[USDA] Get food failed:', response.status, response.statusText)
